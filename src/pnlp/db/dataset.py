@@ -3,6 +3,8 @@
 
 import sqlite3
 from Bio import SeqIO
+from torch.utils.data import Dataset, DataLoader
+
 
 def initialize_db(db_file_path: str, train_fasta: str, test_fasta: str) -> sqlite3.Connection:
     conn = sqlite3.connect(db_file_path)
@@ -38,6 +40,7 @@ class SeqDataset(Dataset):
 
     """
     def __init__(self, db_file: str, table_name: str) -> None:
+        #TODO: check if db_file exists and suggests initilaizae_db if db does not exists.
         self.db_file = db_file
         self.table = table_name
         self.conn = None    # Use lazy loading
