@@ -5,6 +5,7 @@ import copy
 import torch
 import torch.nn as nn
 
+from pnlp.embedding.nlp_embedding import NLPEmbedding
 from pnlp.model.transformer import TransformerBlock
 
 class BERT(nn.Module):
@@ -13,14 +14,15 @@ class BERT(nn.Module):
     """
 
     def __init__(self, 
-                 vocab_size: int=27,
-                 padding_idx: int=25,
-                 hidden: int=768, 
-                 n_transformer_layers: int=12, 
-                 attn_heads: int=12,
-                 dropout: float=0.1):
+                 embedding_dim: int,
+                 dropout: float,
+                 max_len: int,
+                 mask_prob: float,
+                 hidden: int,
+                 n_transformer_layers: int,
+                 attn_heads: int):
         """
-        vacab_size: vacabulary or token size
+        embedding_dim: dimensions of embedding
         hidden: BERT model size (used as input size and hidden size)
         n_layers: number of Transformer layers
         attn_heads: attenion heads
@@ -28,24 +30,27 @@ class BERT(nn.Module):
         """
 
         super().__init__()
+        self.embedding_dim = embedding_dim
+        self.dropout = dropout
+        self.max_len = max_len
+        self.mask_prob = mask_prob
+        
         self.hidden  = hidden
         self.n_transformer_layers = n_transformer_layers
         self.attn_heads = attn_heads
-        # 4 * hidden_size for FFN
-        self.feed_forward_hidden = hidden * 4
+        self.feed_forward_hidden = hidden * 4         # 4 * hidden_size for FFN
 
-        self.transformer_blocks = nn.ModuleList([copy.deepcopy(
-            TransformerBlock(hidden, attn_heads, self.feed_forward_hidden, dropout)) for
-            _ in n_transformer_layers])
+        self.embedding = NLPEmbedding(self.embedding_dim, self.dropout, self.max_len, self.mask_prob)
 
-    def forward(self, x: torch.Tensor, mask):
+        def clones(module, n):
+            """Produce N identical layers"""
+            return nn.ModuleList([copy.deepcopy(module) for _ in range(n)])
 
-        # mask = (x > 0).unsqueeze(1).repeat(1, x.size(1), 1).unsqueeze(1)
-        x = self.embedding(x)   # sequence and position embedding in one step.
-        # x = TokenEmbedding(self.vocab_size, self.embedding_dim, self.padding_idx)
-        print(f'Embedded x with shape:: {x.shape}')
+        self.transformer_blocks = clones(TransformerBlock(self.hidden, self.attn_heads, self.feed_forward_hidden, self.dropout), self.n_transformer_layers)
 
+    def forward(self, x: torch.Tensor):
+        x = self.embedding(x)   # batch sequences
+        #TODO: Generate mask here.
         for transformer in self.transformer_blocks:
-            x = transformer.forward(x, mask=mask)
-
+            x = transformer.forward(x, mask=None)
         return x
