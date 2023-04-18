@@ -9,7 +9,7 @@ from typing import Tuple
 from collections.abc import Sequence
 
 
-class ProteinTokenier:
+class ProteinTokenizer:
     def __init__(self, max_len: int, mask_prob: float):
         """
         Parameters:

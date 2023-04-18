@@ -3,7 +3,7 @@ Test embedding
 """
 
 import unittest
-from pnlp.embedding.tokenizer import ProteinTokenier
+from pnlp.embedding.tokenizer import ProteinTokenizer
 from pnlp.embedding.nlp_embedding import NLPEmbedding
 
 class TestNLPEmbedding(unittest.TestCase):
@@ -19,7 +19,7 @@ class TestNLPEmbedding(unittest.TestCase):
                 self.batch_seqs.append(seq.rstrip())
 
     def test_truncated_sequences(self):
-        tokenizer = ProteinTokenier(self.max_len, self.mask_prob)
+        tokenizer = ProteinTokenizer(self.max_len, self.mask_prob)
         embedder = NLPEmbedding(self.embedding_dim, self.max_len, self.dropout)
         tokenized_seqs, _ = tokenizer.get_token(self.batch_seqs)
         embedded_seqs = embedder(tokenized_seqs)
@@ -30,7 +30,7 @@ class TestNLPEmbedding(unittest.TestCase):
         """Test mask the <PAD> tokens"""
         max_len = 1500
 
-        tokenizer = ProteinTokenier(max_len, self.mask_prob)
+        tokenizer = ProteinTokenizer(max_len, self.mask_prob)
         embedder = NLPEmbedding(self.embedding_dim, max_len, self.dropout)
         tokenized_seqs, _ = tokenizer.get_token(self.batch_seqs)
         embedded_seqs = embedder(tokenized_seqs)

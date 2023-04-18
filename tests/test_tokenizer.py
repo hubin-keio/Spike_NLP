@@ -4,7 +4,7 @@ Test tokenizer
 
 import unittest
 import torch
-from pnlp.embedding.tokenizer import ProteinTokenier
+from pnlp.embedding.tokenizer import ProteinTokenizer
 
 class test_ProteinTokenizer(unittest.TestCase):
     def setUp(self):
@@ -17,7 +17,7 @@ class test_ProteinTokenizer(unittest.TestCase):
         max_len = 1500
         mask_prob = 0.0
         longest = max([len(seq) for seq in self.batch_seqs])
-        tokenizer = ProteinTokenier(max_len, mask_prob)
+        tokenizer = ProteinTokenizer(max_len, mask_prob)
         padded_tokens, mask_idx = tokenizer.get_token(self.batch_seqs)
         self.assertEqual(padded_tokens.size(), (len(self.batch_seqs), longest))
         self.assertIn(tokenizer.token_to_index['<PAD>'], padded_tokens[:,-5:])
@@ -26,7 +26,7 @@ class test_ProteinTokenizer(unittest.TestCase):
         max_len = 1500
         mask_prob = 0.15
         longest = max([len(seq) for seq in self.batch_seqs])
-        tokenizer = ProteinTokenier(max_len, mask_prob)
+        tokenizer = ProteinTokenizer(max_len, mask_prob)
         padded_tokens, mask_idx = tokenizer.get_token(self.batch_seqs)
         self.assertEqual(padded_tokens.size(), (len(self.batch_seqs), longest))
         self.assertIn(tokenizer.token_to_index['<PAD>'], padded_tokens)
@@ -36,7 +36,7 @@ class test_ProteinTokenizer(unittest.TestCase):
         max_len = 500
         mask_prob = 0.15
         
-        tokenizer = ProteinTokenier(max_len, mask_prob)
+        tokenizer = ProteinTokenizer(max_len, mask_prob)
         tokenized_seqs, _ = tokenizer.get_token(self.batch_seqs)
         self.assertEqual(tokenizer.index_to_token[int(tokenized_seqs[0,-1])], '<TRUNCATED>')        
     
