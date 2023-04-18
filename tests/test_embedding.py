@@ -2,7 +2,7 @@
 Test embedding
 """
 import unittest
-from pnlp.embedding import nlp_embedding
+from pnlp.embedding.nlp_embedding import NLPEmbedding
 
 class TestNLPEmbedding(unittest.TestCase):
     def setUp(self):
@@ -17,7 +17,7 @@ class TestNLPEmbedding(unittest.TestCase):
                 self.batch_seqs.append(seq.rstrip())
 
     def test_truncated_sequences(self):
-        embedder = nlp_embedding.NLPEmbedding(self.embedding_dim, self.dropout, self.max_len, self.mask_prob)
+        embedder = NLPEmbedding(self.embedding_dim, self.dropout, self.max_len, self.mask_prob)
 
         padded_seqs = embedder.batch_pad(self.batch_seqs)
         (padded_masked_seqs, masked_idx) = embedder.batch_mask(padded_seqs)
@@ -29,7 +29,7 @@ class TestNLPEmbedding(unittest.TestCase):
             self.assertEqual(int(padded_masked_seqs[0, idx]), embedder.token_to_index['<MASK>'])
 
     def test_forward(self):
-        embedder = nlp_embedding.NLPEmbedding(self.embedding_dim, self.dropout, self.max_len, self.mask_prob)
+        embedder = NLPEmbedding(self.embedding_dim, self.dropout, self.max_len, self.mask_prob)
         x = embedder.forward(self.batch_seqs)
         self.assertEqual(x.size(), (len(self.batch_seqs), self.max_len, self.embedding_dim))
 
