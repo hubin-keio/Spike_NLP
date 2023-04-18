@@ -29,7 +29,7 @@ class TestNLPEmbedding(unittest.TestCase):
     def test_mask(self):
         """Test mask the <PAD> tokens"""
         max_len = 1500
-        
+
         tokenizer = ProteinTokenier(max_len, self.mask_prob)
         embedder = NLPEmbedding(self.embedding_dim, max_len, self.dropout)
         tokenized_seqs, _ = tokenizer.get_token(self.batch_seqs)
@@ -43,7 +43,7 @@ class TestNLPEmbedding(unittest.TestCase):
         seq_lens = [len(seq) for seq in self.batch_seqs]
         longest = max(seq_lens)
         for l in seq_lens:
-            num_expected_pads += longest - l        
+            num_expected_pads += longest - l
 
         print(f'Shape of sequence batch tensor after padding and masking: {tokenized_seqs.shape}')
         print(f'<PAD> token value: {padding_idx} and will be masked.')

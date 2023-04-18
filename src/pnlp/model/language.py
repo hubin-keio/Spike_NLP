@@ -33,6 +33,6 @@ class ProteinLM(nn.Module):
         self.bert = bert
         self.mlm = ProteinMaskedLanguageModel(self.bert.hidden, vocab_size)
 
-    def forward(self, x):
-        x = self.bert(x)
+    def forward(self, x, mask):
+        x = self.bert(x, mask)
         return self.mlm(x)
