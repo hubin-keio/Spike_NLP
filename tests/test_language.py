@@ -1,10 +1,11 @@
-"""Test BERT Model"""
+"""Test Language Model"""
 
 import unittest
 from pnlp.embedding.nlp_embedding import NLPEmbedding
 from pnlp.model.bert import BERT
+from pnlp.model.language import ProteinLM, ProteinMaskedLanguageModel
 
-class test_BERT(unittest.TestCase):
+class test_PLM(unittest.TestCase):
     def setUp(self):
         self.embedding_dim = 24
         self.dropout=0.1
@@ -23,18 +24,22 @@ class test_BERT(unittest.TestCase):
             for seq in fh.readlines():
                 self.batch_seqs.append(seq.rstrip())
 
-    def test_bert_foward(self):
-        model = BERT(self.embedding_dim,
-                     self.dropout,
-                     self.max_len,
-                     self.mask_prob,
-                     self.hidden,
-                     self.n_transformer_layers,
-                     self.attn_heads)
-        output = model.forward(self.batch_seqs)
-        num_parameters = sum(p.numel() for p in model.parameters() if p.requires_grad)
-        self.assertEqual(output.size(), (len(self.batch_seqs), self.max_len, self.embedding_dim))
+    def test_plm_forward(self):
+        bert = BERT(self.embedding_dim,
+                    self.dropout,
+                    self.max_len,
+                    self.mask_prob,
+                    self.hidden,
+                    self.n_transformer_layers,
+                    self.attn_heads)
+
+        plm = ProteinLM(bert, self.vocab_size)
+        output = plm.forward(self.batch_seqs)
+        num_parameters = sum(p.numel() for p in plm.parameters() if p.requires_grad)
+        self.assertEqual(output.size(), (len(self.batch_seqs), self.max_len, self.vocab_size))
         print(f'Number of parameters: {num_parameters}')
+        
 
 if __name__ == '__main__':
     unittest.main()
+

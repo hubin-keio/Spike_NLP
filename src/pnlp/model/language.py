@@ -20,7 +20,6 @@ class ProteinMaskedLanguageModel(nn.Module):
 
     def forward(self, x):
         x = self.softmax(self.linear(x))
-        print(f'x = {x}, shape: {x.shape}')
         return x
 
 # %%
@@ -34,6 +33,6 @@ class ProteinLM(nn.Module):
         self.bert = bert
         self.mlm = ProteinMaskedLanguageModel(self.bert.hidden, vocab_size)
 
-    def forward(self, x, mask=None):
-        x = self.bert(x, mask)
+    def forward(self, x):
+        x = self.bert(x)
         return self.mlm(x)
