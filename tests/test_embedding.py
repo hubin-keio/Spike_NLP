@@ -33,5 +33,29 @@ class TestNLPEmbedding(unittest.TestCase):
         x = embedder.forward(self.batch_seqs)
         self.assertEqual(x.size(), (len(self.batch_seqs), self.max_len, self.embedding_dim))
 
+    def test_mask(self):
+        """Test mask the <PAD> tokens"""
+        max_len = 1500
+        embedder = NLPEmbedding(self.embedding_dim, self.dropout, max_len, self.mask_prob)
+        x_padded = embedder.batch_pad(self.batch_seqs)
+        x_padded_masked, _ = embedder.batch_mask(x_padded)
+        padding_idx = embedder.token_to_index['<PAD>']
+        mask_tensor = x_padded_masked ==padding_idx
+        total_masks = (mask_tensor == True).sum().item()
+
+        num_expected_pads = 0
+        seq_lens = [len(seq) for seq in self.batch_seqs]
+        longest = max(seq_lens)
+        for l in seq_lens:
+            num_expected_pads += longest - l        
+
+        print(f'Shape of sequence batch tensor after padding and masking: {x_padded_masked.shape}')
+        print(f'<PAD> token value: {padding_idx} and will be masked.')
+        print(f'Mask tensor (<PAD>) shape: {mask_tensor.size()}')
+        print(f'Totalk masks (tokens = <PAD>): {total_masks}, expecting {num_expected_pads}.')
+
+        self.assertEqual(total_masks, num_expected_pads)
+
+
 if __name__ == '__main__':
     unittest.main()
