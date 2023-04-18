@@ -40,7 +40,7 @@ class BERT(nn.Module):
         self.attn_heads = attn_heads
         self.feed_forward_hidden = hidden * 4         # 4 * hidden_size for FFN
 
-        self.embedding = NLPEmbedding(self.embedding_dim, self.dropout, self.max_len, self.mask_prob)
+        self.embedding = NLPEmbedding(self.embedding_dim, self.max_len, self.dropout)
 
         def clones(module, n):
             """Produce N identical layers"""
@@ -48,8 +48,8 @@ class BERT(nn.Module):
 
         self.transformer_blocks = clones(TransformerBlock(self.hidden, self.attn_heads, self.feed_forward_hidden, self.dropout), self.n_transformer_layers)
 
-    def forward(self, x: torch.Tensor):
-        x = self.embedding(x)   # batch sequences
+    def forward(self, x: torch.Tensor, mask):
+        x = self.embedding(x)   # tokenized batch sequences
         #TODO: Generate mask here.
         for transformer in self.transformer_blocks:
             x = transformer.forward(x, mask=None)
