@@ -13,12 +13,12 @@ class BERT(nn.Module):
     BERT model
     """
 
-    def __init__(self, 
+    def __init__(self,
                  embedding_dim: int,
                  dropout: float,
                  max_len: int,
                  mask_prob: float,
-                 hidden: int,
+                 # hidden: int,
                  n_transformer_layers: int,
                  attn_heads: int):
         """
@@ -34,11 +34,11 @@ class BERT(nn.Module):
         self.dropout = dropout
         self.max_len = max_len
         self.mask_prob = mask_prob
-        
-        self.hidden  = hidden
+
+        self.hidden  = embedding_dim
         self.n_transformer_layers = n_transformer_layers
         self.attn_heads = attn_heads
-        self.feed_forward_hidden = hidden * 4         # 4 * hidden_size for FFN
+        self.feed_forward_hidden = self.hidden * 4         # 4 * hidden_size for FFN
 
         self.embedding = NLPEmbedding(self.embedding_dim, self.max_len, self.dropout)
 

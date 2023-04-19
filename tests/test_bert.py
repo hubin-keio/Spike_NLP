@@ -31,7 +31,6 @@ class test_BERT(unittest.TestCase):
                      self.dropout,
                      self.max_len,
                      self.mask_prob,
-                     self.hidden,
                      self.n_transformer_layers,
                      self.attn_heads)
         tokenized_seqs, masked_idx = self.tokenizer.get_token(self.batch_seqs)

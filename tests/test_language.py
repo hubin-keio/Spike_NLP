@@ -33,7 +33,6 @@ class test_PLM(unittest.TestCase):
                     self.dropout,
                     self.max_len,
                     self.mask_prob,
-                    self.hidden,
                     self.n_transformer_layers,
                     self.attn_heads)
 
