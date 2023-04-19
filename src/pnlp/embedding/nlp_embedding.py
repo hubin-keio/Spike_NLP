@@ -78,10 +78,18 @@ class NLPEmbedding(nn.Module):
     def forward(self, batch_token: torch.Tensor):
         """
         Sequence embedding
-        
+
         Parameters:
         batch_token: Tensor of the shape (batch_size, max(longest_seq, max_len))
         """
         x = self.token_embedding(batch_token)
         x = self.add_position(x)
-        return self.dropout(x)
+
+        (batch_size, seq_len) = batch_token.shape
+
+        padding_masks = batch_token == self.padding_idx
+        padding_masks = padding_masks.unsqueeze(2).expand(batch_size, seq_len, seq_len)
+        mask_tensor = torch.ones(batch_size, seq_len, seq_len)
+        mask_tensor = mask_tensor.masked_fill(padding_masks, 0.0)
+
+        return self.dropout(x), mask_tensor

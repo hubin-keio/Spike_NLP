@@ -22,8 +22,18 @@ class TestNLPEmbedding(unittest.TestCase):
         tokenizer = ProteinTokenizer(self.max_len, self.mask_prob)
         embedder = NLPEmbedding(self.embedding_dim, self.max_len, self.dropout)
         tokenized_seqs, _ = tokenizer.get_token(self.batch_seqs)
-        embedded_seqs = embedder(tokenized_seqs)
+        embedded_seqs, mask_tensor = embedder(tokenized_seqs)
+
+        seq_lens = [len(seq) for seq in self.batch_seqs]
+        longest = max(seq_lens)
+        mask_dim = min(longest, self.max_len)
+
+        print(f'Batch sequence embedded shape: {embedded_seqs.shape}')
+        print(f'Mask tensor shape: {mask_tensor.shape}')
+
         self.assertEqual(embedded_seqs.shape, (len(self.batch_seqs), self.max_len, self.embedding_dim))
+        self.assertEqual(mask_tensor.shape, (len(self.batch_seqs), mask_dim, mask_dim))
+
 
 
     def test_mask(self):
@@ -33,11 +43,11 @@ class TestNLPEmbedding(unittest.TestCase):
         tokenizer = ProteinTokenizer(max_len, self.mask_prob)
         embedder = NLPEmbedding(self.embedding_dim, max_len, self.dropout)
         tokenized_seqs, _ = tokenizer.get_token(self.batch_seqs)
-        embedded_seqs = embedder(tokenized_seqs)
+        embedded_seqs, masks = embedder(tokenized_seqs)
 
         padding_idx = tokenizer.token_to_index['<PAD>']
         mask_tensor = tokenized_seqs == padding_idx
-        total_masks = (mask_tensor == True).sum().item()
+        total_pads = (mask_tensor == True).sum().item()
 
         num_expected_pads = 0
         seq_lens = [len(seq) for seq in self.batch_seqs]
@@ -47,11 +57,10 @@ class TestNLPEmbedding(unittest.TestCase):
 
         print(f'Shape of sequence batch tensor after padding and masking: {tokenized_seqs.shape}')
         print(f'<PAD> token value: {padding_idx} and will be masked.')
-        print(f'Mask tensor (<PAD>) shape: {mask_tensor.size()}')
-        print(f'Totalk masks (tokens = <PAD>): {total_masks}, expecting {num_expected_pads}.')
+        print(f'Totalk padded tokens : {total_pads}, expecting {num_expected_pads}.')
 
         self.assertEqual(mask_tensor.size(), (len(self.batch_seqs), longest))
-        self.assertEqual(total_masks, num_expected_pads)
+        self.assertEqual(total_pads, num_expected_pads)
 
 
 if __name__ == '__main__':
