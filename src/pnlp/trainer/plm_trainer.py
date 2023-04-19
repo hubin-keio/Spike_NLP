@@ -21,7 +21,7 @@ class ScheduledOptim():
         self.n_current_steps = 0
         self.init_lr = np.power(d_model, -0.5)
 
-    def step_and_update_lr(self):
+    def step(self):
         "Step with the inner optimizer"
         self._update_learning_rate()
         self._optimizer.step()
@@ -118,6 +118,8 @@ class Plm_Trainer:
                             total = len(data_loader),
                             bar_format='{l_bar}{r_bar}')
         
+        running_loss = 0
+        
         for i, batch_data in data_iter:
             
             seq_ids, seqs = batch_data
@@ -126,15 +128,9 @@ class Plm_Trainer:
             
             tokenized_seqs = tokenized_seqs.to(self.device)
             
-            padding_idx = tokenizer.token_to_index['<PAD>']
-            mask_tensor = tokenized_seqs == padding_idx
-            masked_tensor = mask_tensor.to(self.device)
+            logits = self.model(tokenized_seqs)
             
-            #embedded seq and mask tensor
-            logits = self.model(tokenized_seqs,masked_tensor)
-            
-            loss = self.criterion(logits.view(-1,logits.szie(-1)), seqs.view(-1))
-            
+            loss = self.criterion(logits.view(-1,logits.size(-1)), tokenized_seqs.view(-1))
             
             if train:
                 self.optim.zero_grad()
@@ -145,10 +141,10 @@ class Plm_Trainer:
                 
                 self.optim_schedule.step()
                 
-                
-            running_loss = (loss.item() if running_loss is None else 0.99 * running_loss + 0.01 * loss.item())
+            running_loss += (loss.item() if running_loss is None else 0.99 * running_loss + 0.01 * loss.item())
             
-            
+        # torch.save(self.model.state_dict(), 'model_weights.pth')
+        
         return running_loss
                 
                 
