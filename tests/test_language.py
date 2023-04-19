@@ -39,15 +39,12 @@ class test_PLM(unittest.TestCase):
 
         plm = ProteinLM(bert, self.vocab_size)
         tokenized_seqs, masked_idx = self.tokenizer.get_token(self.batch_seqs)
-        mask_tensor = tokenized_seqs == self.padding_idx
-        output = plm.forward(tokenized_seqs, mask_tensor)
+        output = plm.forward(tokenized_seqs)
         num_parameters = sum(p.numel() for p in plm.parameters() if p.requires_grad)
         self.assertEqual(output.size(), (len(self.batch_seqs),
                                          min(self.longest, self.max_len),
                                          self.vocab_size))
         print(f'Number of parameters: {num_parameters}')
-        print(f'Mask tensor shape: {mask_tensor.shape}')
-        print(f'Total masks==True: {(mask_tensor == 1).sum().item()}')
 
 
 

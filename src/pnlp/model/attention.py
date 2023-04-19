@@ -31,12 +31,12 @@ class MultiHeadedAttention(nn.Module):
     d_model: model size
 
     """
-    def __init__(self, h:int, d_model:int, n_linear: int=4, dropout=0.1):
+    def __init__(self, num_head:int, d_model:int, n_linear: int=4, dropout=0.1):
         super().__init__()
-        assert d_model % h == 0 # d_model/h is used as d_k and d_v
+        assert d_model % num_head == 0 # d_model/h is used as d_k and d_v
 
-        self.d_k = d_model // h
-        self.h = h
+        self.d_k = d_model // num_head
+        self.num_head = num_head
         self.linears = nn.ModuleList([nn.Linear(d_model, d_model) for _ in range(n_linear)])  # n layers of linear model with the same input and output size
         self.output_linear = nn.Linear(d_model, d_model)    # Output lienar model. This implementation follows BERT-pytorch instead of using the last linear layer, which is found in the annotated transformer.
         self.attn = Attention() # The forward function in Attention class is called since no hooks are defined in Attention class. See __call__() and _call_impl() in nn.Module implementation.
@@ -49,7 +49,7 @@ class MultiHeadedAttention(nn.Module):
         n_batches = query.size(0)
 
         # 1) Linear projections in batch from d_model => h x d_k
-        query, key, value = [lin(x).view(n_batches, -1, self.h, self.d_k).transpose(1, 2)
+        query, key, value = [lin(x).view(n_batches, -1, self.num_head, self.d_k).transpose(1, 2)
                              for lin, x in zip(self.linears, (query, key, value))]
 
         # 2) Apply attention on all the projected vectors in batch
@@ -58,6 +58,6 @@ class MultiHeadedAttention(nn.Module):
         # 3) "Concat using a view and apply a final linear"
         x = (x.transpose(1, 2)
              .contiguous()
-             .view(n_batches, -1, self.h * self.d_k))
+             .view(n_batches, -1, self.num_head * self.d_k))
 
         return self.output_linear(x)

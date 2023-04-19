@@ -48,9 +48,9 @@ class BERT(nn.Module):
 
         self.transformer_blocks = clones(TransformerBlock(self.hidden, self.attn_heads, self.feed_forward_hidden, self.dropout), self.n_transformer_layers)
 
-    def forward(self, x: torch.Tensor, mask):
-        x = self.embedding(x)   # tokenized batch sequences
-        #TODO: Generate mask here.
+    def forward(self, x: torch.Tensor):
+        embedded_seqs, mask_tensor = self.embedding(x)   # tokenized batch sequences
+
         for transformer in self.transformer_blocks:
-            x = transformer.forward(x, mask=None)
+            x = transformer.forward(embedded_seqs, mask_tensor)
         return x

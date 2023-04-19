@@ -66,9 +66,8 @@ class TransformerBlock(nn.Module):
         feed_forward_hidden: feed forward layer hidden size, usually 4 * hidden_size
         dropout: dropout ratio
         """
-
         super().__init__()
-        self.attention = MultiHeadedAttention(h=attn_heads, d_model=hidden)
+        self.attention = MultiHeadedAttention(num_head=attn_heads, d_model=hidden)
         self.feed_forward = PositionwiseFeedForward(d_model=hidden, d_ff=feed_forward_hidden, dropout=dropout)
         self.input_sublayer = SublayerConnection(size=hidden, dropout=dropout)
         self.output_sublayer = SublayerConnection(size=hidden, dropout=dropout)
