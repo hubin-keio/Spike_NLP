@@ -43,24 +43,25 @@ class ScheduledOptim():
         for param_group in self._optimizer.param_groups:
             param_group['lr'] = lr
 
-class Plm_Trainer:
+class PLM_Trainer:
     
     def __init__(self,
-                 bert: BERT,
-                 vocab_dict:dict,
+                 embedding_dim:int,           # BERT parameters
+                 dropout: float,                 
                  max_len: int,             
-                 embedding_dim:int,
+                 mask_prob: float,
                  n_transformer_layers:int,
                  n_attn_heads: int,
-                 dropout: float,
-                 mask_prob: float,    
-                 batch_size: int,
+
+                 batch_size: int,             # Learning parameters
                  lr: float=1e-4,
                  betas=(0.9, 0.999),
                  weight_decay: float=0.01,
                  warmup_steps: int=10000
                 ):
         
+        bert = BERT(embedding_dim, dropout, max_len, mask_prob, n_transformer_layers, n_attn_heads)
+        mlm = ProteinLM(bert, 
         
         #init parameters 
         self.embedding_dim = embedding_dim
@@ -76,7 +77,7 @@ class Plm_Trainer:
         self.betas = betas
         self.weight_decay = weight_decay
         self.warmup_steps = warmup_steps
-        self.bert = bert(self.embedding_dim,
+        self.bert = BERT(self.embedding_dim,
                      self.dropout,
                      self.max_len,
                      self.mask_prob,
@@ -85,8 +86,6 @@ class Plm_Trainer:
                      self.n_attn_heads)
         #get tokenizer
         self.tokenizer = ProteinTokenizer(self.max_len, self.mask_prob)
-        #set device 
-        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         #initialize model
         self.model = ProteinLM(self.bert, len(vocab_dict)).to(self.device)
         #set optimizer and scheduler
@@ -95,6 +94,10 @@ class Plm_Trainer:
         
         #set criterion to evaluate accuracy 
         self.criterion = torch.nn.CrossEntropyLoss()
+
+        #set device 
+        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        
         
     def train(self, train_data, epoch: int=10):
         self.epoch_iteration(epoch, train_data)
@@ -151,42 +154,7 @@ class Plm_Trainer:
                 
                 
 if __name__=="__main__":
-    
-    vocab_dict = {'A': 0, 
-                 'C': 1,
-                 'D': 2,
-                 'E': 3,
-                 'F': 4,
-                 'G': 5,
-                 'H': 6,
-                 'I': 7,
-                 'K': 8,
-                 'L': 9,
-                 'M': 10,
-                 'N': 11,
-                 'P': 12,
-                 'Q': 13,
-                 'R': 14,
-                 'S': 15,
-                 'T': 16,
-                 'U': 17,
-                 'V': 18,
-                 'W': 19,
-                 'X': 20,
-                 'Y': 21,
-                 '<OTHER>': 22,
-                 '<START>': 23,
-                 '<END>': 24,
-                 '<PAD>':25,
-                 '<MASK>': 26, 
-                 '<TRUNCATED>': 27
-                 }
-    
-    ALL_AAS = 'ACDEFGHIKLMNPQRSTUVWXY'
-    ADDITIONAL_TOKENS = ['<OTHER>', '<START>', '<END>', '<PAD>', '<MASK>', '<TRUNCATED>']
-        
-        
-    # initialize_db('/Users/michal/ML_DEV/Spike_NLP/data/SARS_CoV_2_spike.db','/Users/michal/ML_DEV/Spike_NLP/data/spikeprot0203.clean.uniq.training.fasta','/Users/michal/ML_DEV/Spike_NLP/data/spikeprot0203.clean.uniq.testing.fasta')
+    # Data loader
     db_file = path.abspath(path.dirname(__file__))
     db_file = path.join(db_file, '../../../data/SARS_CoV_2_spike.db')
     train_dataset = SeqDataset(db_file, "train")
@@ -200,11 +168,11 @@ if __name__=="__main__":
     lr=0.0001
 
     tokenizer = ProteinTokenizer(max_len, mask_prob)
-    embedder = NLPEmbedding(embedding_dim,max_len,dropout)
+    embedder = NLPEmbedding(embedding_dim, max_len,dropout)
 
     vocab_size = len(tokenizer.token_to_index)
     padding_idx = tokenizer.token_to_index['<PAD>']
-    hidden =embedding_dim
+    hidden = embedding_dim
     n_transformer_layers = 12
     attn_heads = 12
 

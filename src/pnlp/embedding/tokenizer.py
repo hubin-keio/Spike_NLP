@@ -10,6 +10,20 @@ from collections.abc import Sequence
 
 
 class ProteinTokenizer:
+    ALL_AAS = 'ACDEFGHIKLMNPQRSTUVWXY'
+    ADDITIONAL_TOKENS = ['<OTHER>', '<START>', '<END>', '<PAD>', '<MASK>', '<TRUNCATED>']
+
+    # Each sequence is added <START> and <END>. "<PAD>" are added to sequence shorten than max_len.
+    ADDED_TOKENS_PER_SEQ = 2
+
+    n_aas = len(ALL_AAS)
+    aa_to_token = {aa: i for i, aa in enumerate(ALL_AAS)}
+    additional_token_to_index = {token: i + n_aas for i, token in enumerate(ADDITIONAL_TOKENS)}
+
+    token_to_index = {**self.aa_to_token, **additional_token_to_index}
+    index_to_token = {index: token for token, index in token_to_index.items()}
+    padding_idx = token_to_index['<PAD>']
+
     def __init__(self, max_len: int, mask_prob: float):
         """
         Parameters:
@@ -19,20 +33,6 @@ class ProteinTokenizer:
         """
         self.max_len = max_len        
         self.mask_prob = mask_prob
-
-        ALL_AAS = 'ACDEFGHIKLMNPQRSTUVWXY'
-        ADDITIONAL_TOKENS = ['<OTHER>', '<START>', '<END>', '<PAD>', '<MASK>', '<TRUNCATED>']
-
-        # Each sequence is added <START> and <END>. "<PAD>" are added to sequence shorten than max_len.
-        ADDED_TOKENS_PER_SEQ = 2
-
-        n_aas = len(ALL_AAS)
-        self.aa_to_token = {aa: i for i, aa in enumerate(ALL_AAS)}
-        additional_token_to_index = {token: i + n_aas for i, token in enumerate(ADDITIONAL_TOKENS)}
-
-        self.token_to_index = {**self.aa_to_token, **additional_token_to_index}
-        self.index_to_token = {index: token for token, index in self.token_to_index.items()}
-        self.padding_idx = self.token_to_index['<PAD>']
 
     def _batch_pad(self, batch_seqs:Sequence[str]) -> torch.Tensor:
         """
@@ -106,3 +106,4 @@ class ProteinTokenizer:
             return self._batch_mask(x_padded)
         else:
             return x_padded, []
+
