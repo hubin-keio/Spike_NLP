@@ -1,7 +1,7 @@
 """Test BERT Model"""
 
 import unittest
-from pnlp.embedding.tokenizer import ProteinTokenizer
+from pnlp.embedding.tokenizer import ProteinTokenizer, token_to_index
 from pnlp.embedding.nlp_embedding import NLPEmbedding
 from pnlp.model.bert import BERT
 
@@ -15,8 +15,8 @@ class test_BERT(unittest.TestCase):
         self.tokenizer = ProteinTokenizer(self.max_len, self.mask_prob)
         self.embedder = NLPEmbedding(self.embedding_dim, self.max_len, self.dropout)
 
-        self.vocab_size = len(self.tokenizer.token_to_index)
-        self.padding_idx = self.tokenizer.token_to_index['<PAD>']
+        self.vocab_size = len(token_to_index)
+        self.padding_idx = token_to_index['<PAD>']
         self.hidden = self.embedding_dim
         self.n_transformer_layers = 12
         self.attn_heads = 12

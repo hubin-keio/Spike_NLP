@@ -8,7 +8,7 @@ import math
 import torch
 import torch.nn as nn
 
-from pnlp.embedding.tokenizer import ProteinTokenizer
+from pnlp.embedding.tokenizer import ProteinTokenizer, token_to_index, PADDING_IDX
 
 
 class PositionalEmbedding(nn.Module):
@@ -59,10 +59,10 @@ class NLPEmbedding(nn.Module):
         self.max_len = max_len
         self.dropout = nn.Dropout(dropout)
         tokenizer = ProteinTokenizer(0, 0.0)
-        self.padding_idx = tokenizer.token_to_index['<PAD>']
-        self.token_embedding = nn.Embedding(len(tokenizer.token_to_index),
+        self.padding_idx = PADDING_IDX
+        self.token_embedding = nn.Embedding(len(token_to_index),
                                             embedding_dim,
-                                            self.padding_idx)  # prevent <PAD> embedding from updating.
+                                            PADDING_IDX)  # prevent <PAD> embedding from updating.
         self.add_position = PositionalEmbedding(embedding_dim, dropout, max_len)
 
 

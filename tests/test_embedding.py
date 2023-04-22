@@ -3,7 +3,7 @@ Test embedding
 """
 
 import unittest
-from pnlp.embedding.tokenizer import ProteinTokenizer
+from pnlp.embedding.tokenizer import ProteinTokenizer, PADDING_IDX, token_to_index
 from pnlp.embedding.nlp_embedding import NLPEmbedding
 
 class TestNLPEmbedding(unittest.TestCase):
@@ -41,12 +41,8 @@ class TestNLPEmbedding(unittest.TestCase):
         max_len = 1500
 
         tokenizer = ProteinTokenizer(max_len, self.mask_prob)
-        embedder = NLPEmbedding(self.embedding_dim, max_len, self.dropout)
         tokenized_seqs, _ = tokenizer.get_token(self.batch_seqs)
-        embedded_seqs, masks = embedder(tokenized_seqs)
-
-        padding_idx = tokenizer.token_to_index['<PAD>']
-        mask_tensor = tokenized_seqs == padding_idx
+        mask_tensor = tokenized_seqs == PADDING_IDX
         total_pads = (mask_tensor == True).sum().item()
 
         num_expected_pads = 0
@@ -56,8 +52,8 @@ class TestNLPEmbedding(unittest.TestCase):
             num_expected_pads += longest - l
 
         print(f'Shape of sequence batch tensor after padding and masking: {tokenized_seqs.shape}')
-        print(f'<PAD> token value: {padding_idx} and will be masked.')
-        print(f'Totalk padded tokens : {total_pads}, expecting {num_expected_pads}.')
+        print(f'<PAD> token value: {PADDING_IDX} and will be masked.')
+        print(f'Total padded tokens : {total_pads}, expecting {num_expected_pads}.')
 
         self.assertEqual(mask_tensor.size(), (len(self.batch_seqs), longest))
         self.assertEqual(total_pads, num_expected_pads)

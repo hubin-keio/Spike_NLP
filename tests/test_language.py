@@ -1,7 +1,7 @@
 """Test Language Model"""
 
 import unittest
-from pnlp.embedding.tokenizer import ProteinTokenizer
+from pnlp.embedding.tokenizer import ProteinTokenizer, token_to_index, PADDING_IDX
 from pnlp.embedding.nlp_embedding import NLPEmbedding
 from pnlp.model.bert import BERT
 from pnlp.model.language import ProteinLM, ProteinMaskedLanguageModel
@@ -16,8 +16,8 @@ class test_PLM(unittest.TestCase):
         self.tokenizer = ProteinTokenizer(self.max_len, self.mask_prob)
         self.embedder = NLPEmbedding(self.embedding_dim, self.max_len, self.dropout)
 
-        self.vocab_size = len(self.tokenizer.token_to_index)
-        self.padding_idx = self.tokenizer.token_to_index['<PAD>']
+        self.vocab_size = len(token_to_index)
+        self.padding_idx = PADDING_IDX
         self.hidden = self.embedding_dim
         self.n_transformer_layers = 12
         self.attn_heads = 12
