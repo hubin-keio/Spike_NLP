@@ -6,7 +6,7 @@ import random
 import torch
 import torch.nn as nn
 from typing import Tuple
-from collections import Sequence
+from typing import Sequence
 
 ALL_AAS = 'ACDEFGHIKLMNPQRSTUVWXY'
 ADDITIONAL_TOKENS = ['<OTHER>', '<START>', '<END>', '<PAD>', '<MASK>', '<TRUNCATED>']
@@ -35,7 +35,7 @@ class ProteinTokenizer:
         self.max_len = max_len        
         self.mask_prob = mask_prob
 
-    def _batch_pad(self, batch_seqs: Sequence) -> torch.Tensor:
+    def _batch_pad(self, batch_seqs: Sequence[str]) -> torch.Tensor:
         """
         Tokenize a sequence batch and add padding when needed.
 
@@ -94,7 +94,7 @@ class ProteinTokenizer:
                 masked_idx.append(idx)
         return batch_masked, masked_idx
 
-    def get_token(self, batch_seqs: Sequence):
+    def get_token(self, batch_seqs: Sequence[str]):
         """Get token representation for a batch of sequences and index of added <MASK>."""
         x_padded = self._batch_pad(batch_seqs)
         if self.mask_prob > 0:
