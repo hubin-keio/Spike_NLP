@@ -18,7 +18,7 @@ class test_ProteinTokenizer(unittest.TestCase):
         mask_prob = 0.0
         longest = max([len(seq) for seq in self.batch_seqs])
         tokenizer = ProteinTokenizer(max_len, mask_prob)
-        padded_tokens, mask_idx = tokenizer.get_token(self.batch_seqs)
+        padded_tokens, mask_idx = tokenizer(self.batch_seqs)
         self.assertEqual(padded_tokens.size(), (len(self.batch_seqs), longest))
         self.assertIn(token_to_index['<PAD>'], padded_tokens[:,-5:])
 
@@ -27,7 +27,7 @@ class test_ProteinTokenizer(unittest.TestCase):
         mask_prob = 0.15
         longest = max([len(seq) for seq in self.batch_seqs])
         tokenizer = ProteinTokenizer(max_len, mask_prob)
-        padded_tokens, mask_idx = tokenizer.get_token(self.batch_seqs)
+        padded_tokens, mask_idx = tokenizer(self.batch_seqs)
         self.assertEqual(padded_tokens.size(), (len(self.batch_seqs), longest))
         self.assertIn(token_to_index['<PAD>'], padded_tokens)
         self.assertIn(token_to_index['<MASK>'], padded_tokens)
@@ -37,7 +37,7 @@ class test_ProteinTokenizer(unittest.TestCase):
         mask_prob = 0.15
         
         tokenizer = ProteinTokenizer(max_len, mask_prob)
-        tokenized_seqs, _ = tokenizer.get_token(self.batch_seqs)
+        tokenized_seqs, _ = tokenizer(self.batch_seqs)
         self.assertEqual(index_to_token[int(tokenized_seqs[0,-1])], '<TRUNCATED>')        
     
 

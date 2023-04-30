@@ -22,7 +22,7 @@ token_to_index = {**aa_to_token, **additional_token_to_index}
 index_to_token = {index: token for token, index in token_to_index.items()}
 PADDING_IDX = token_to_index['<PAD>']
 
-class ProteinTokenizer:
+class ProteinTokenizer(nn.Module):
 
 
     def __init__(self, max_len: int, mask_prob: float):
@@ -32,6 +32,7 @@ class ProteinTokenizer:
         max_len: maximum length of the input sequence before it is truncated to this lenth
         mask_prob: probability of token masking. 0.0 for no masking.
         """
+        super().__init__()
         self.max_len = max_len        
         self.mask_prob = mask_prob
 
@@ -94,10 +95,11 @@ class ProteinTokenizer:
                 masked_idx.append(idx)
         return batch_masked, masked_idx
 
-    def get_token(self, batch_seqs: Sequence[str]):
+    def forward(self, batch_seqs: Sequence[str]):
         """Get token representation for a batch of sequences and index of added <MASK>."""
-        x_padded = self._batch_pad(batch_seqs)
-        if self.mask_prob > 0:
-            return self._batch_mask(x_padded)
-        else:
-            return x_padded, []
+        with torch.no_grad():
+            x_padded = self._batch_pad(batch_seqs)
+            if self.mask_prob > 0:
+                return self._batch_mask(x_padded)
+            else:
+                return x_padded, []

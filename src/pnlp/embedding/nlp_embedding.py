@@ -57,7 +57,7 @@ class NLPEmbedding(nn.Module):
         self.embeddng_dim = embedding_dim
         self.max_len = max_len
         self.dropout = nn.Dropout(dropout)
-        self.padding_idx = PADDING_IDX
+        self.padding_idx = PADDING_IDX  # TODO FIXME: padding idx should be a construct parameter.
         self.token_embedding = nn.Embedding(len(token_to_index),
                                             embedding_dim,
                                             PADDING_IDX)  # prevent <PAD> embedding from updating.
@@ -82,10 +82,13 @@ class NLPEmbedding(nn.Module):
         """
         x = self.token_embedding(batch_token)
         x = self.add_position(x)
+
         (batch_size, seq_len) = batch_token.shape
         padding_masks = batch_token == self.padding_idx
         padding_masks = padding_masks.unsqueeze(2).expand(batch_size, seq_len, seq_len)
+
         mask_tensor = torch.ones(batch_size, seq_len, seq_len)
+        mask_tensor = mask_tensor.to(batch_token.device)  # same device as input
         mask_tensor = mask_tensor.masked_fill(padding_masks, 0.0)
 
         return self.dropout(x), mask_tensor

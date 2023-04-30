@@ -37,7 +37,7 @@ class test_PLM(unittest.TestCase):
                     self.attn_heads)
 
         plm = ProteinLM(bert, self.vocab_size)
-        tokenized_seqs, masked_idx = self.tokenizer.get_token(self.batch_seqs)
+        tokenized_seqs, masked_idx = self.tokenizer(self.batch_seqs)
         output = plm.forward(tokenized_seqs)
         num_parameters = sum(p.numel() for p in plm.parameters() if p.requires_grad)
         self.assertEqual(output.size(), (len(self.batch_seqs),
