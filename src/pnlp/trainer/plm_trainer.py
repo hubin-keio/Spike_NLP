@@ -1,4 +1,8 @@
 """Protein Language Model Trainer"""
+
+import os
+import sys
+import datetime
 from os import path
 from typing import Union
 import sqlite3
@@ -49,6 +53,7 @@ class ScheduledOptim():
 class PLM_Trainer:
 
     def __init__(self,
+                 save: bool,        # If model will be saved.
                  embedding_dim:int,           # BERT parameters
                  dropout: float,
                  max_len: int,
@@ -59,17 +64,26 @@ class PLM_Trainer:
                  batch_size: int,             # Learning parameters
                  lr: float=1e-4,
                  betas=(0.9, 0.999),
-                 weight_decay: float=0.01,
-                 warmup_steps: int=10000,
-                 device: str='cpu'):
+                 weight_decay: float = 0.01,
+                 warmup_steps: int= 10000,
+                 device: str='cpu',
 
-        # set device
+    ):
+
+        if save:
+            # create the file name
+            now = datetime.datetime.now()
+            date = now.strftime("%Y-%m-%d")
+            hour = now.strftime("%H")
+            minute = now.strftime("%M")
+            self.save_as = f"data_{date}_{hour}_{minute}"
+
         self.device = device
+
 
         # initialize model
         self.tokenizer = ProteinTokenizer(max_len, mask_prob)
         bert = BERT(embedding_dim, dropout, max_len, mask_prob, n_transformer_layers, n_attn_heads)
-        # bert.to(self.device)
         self.model = ProteinLM(bert, vocab_size)
         self.model.to(self.device)
 
@@ -92,7 +106,7 @@ class PLM_Trainer:
 
 
 
-    def train(self, train_data, num_epochs: int, max_batch: Union[int, None], save_path=None):
+    def train(self, train_data, num_epochs: int, max_batch: Union[int, None]):
         """
         Model training
 
@@ -100,20 +114,29 @@ class PLM_Trainer:
         train_data: a dataloader feeding protein sequences
         num_epochs: number of toal epochs in training.
         max_batch: maximum number of batches in training. If not defined, all avaiable batches from train_data will be used.
-        save_path: output file.
         """
         if not max_batch:
             max_batch = len(train_loader)
 
+        if self.save_as:        # TODO: check write access
+            loss_history_file = ''.join([self.save_as, '_results.csv'])
+            fh = open(loss_history_file, 'w')
+            fh.write('epoch, loss\n')
+            
         for epoch in range(1, num_epochs + 1):
             running_loss = self.epoch_iteration(epoch, max_batch, train_data, train=True)
 
             if epoch % 1 == 0:
                 print(f'Epoch {epoch}: Average Loss: {running_loss}')
+                if fh:
+                    fh.write(f'{epoch}, {running_loss}\n')
 
             if epoch % 10 == 0:
-                if save_path is not None:
-                    self.save_model(save_path,epoch)
+                if self.save_as:
+                    self.save_model()
+        if fh:
+            fh.close()
+                    
 
     def test(self, test_data, num_epochs: int=10):
         self.epoch_iteration(epoch, test_data, train=False)
@@ -150,8 +173,14 @@ class PLM_Trainer:
                 self.optim_schedule.step()
             running_loss += (loss.item() if running_loss is None else 0.99 * running_loss + 0.01 * loss.item())
 
-        # torch.save(self.model.state_dict(), 'model_weights.pth')
+        
         return running_loss
+
+    def save_model(self):
+        print(self.save_as)
+        if self.save_as:
+            file_path = ''.join([self.save_as, '_model_weights.pth'])
+            torch.save(self.model.state_dict(), file_path)        
 
 
 
@@ -164,6 +193,7 @@ if __name__=="__main__":
     print(f'Sequence db file: {db_file}')
     print(f'Total seqs in training set: {len(train_dataset)}')
 
+
     embedding_dim = 12
     dropout=0.1
     max_len = 1500
@@ -171,7 +201,7 @@ if __name__=="__main__":
     n_transformer_layers = 12
     attn_heads = 12
 
-    batch_size = 5
+    batch_size = 8
     lr = 0.0001
     weight_decay = 0.01
     warmup_steps = 1000
@@ -183,11 +213,12 @@ if __name__=="__main__":
     vocab_size = len(token_to_index)
     hidden = embedding_dim
 
-    num_epochs = 10
+    num_epochs = 100
     num_workers = 1
-    n_test_baches = 50
+    n_test_baches = 100
 
     USE_GPU = True
+    SAVE_MODEL = True
     device = torch.device("cuda:0" if torch.cuda.is_available() and USE_GPU else "cpu")
     print(f'\nUsing device: {device}')
 
@@ -195,9 +226,9 @@ if __name__=="__main__":
     train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, drop_last=True)
 
 
-    trainer = PLM_Trainer(embedding_dim=embedding_dim, dropout=dropout, max_len=max_len,
+    trainer = PLM_Trainer(SAVE_MODEL, embedding_dim=embedding_dim, dropout=dropout, max_len=max_len,
                           mask_prob=mask_prob, n_transformer_layers=n_transformer_layers,
                           n_attn_heads=attn_heads, batch_size=batch_size, lr=lr, betas=betas,
                           weight_decay=weight_decay, warmup_steps=warmup_steps, device=device)
-    trainer.print_model_params()
+    # trainer.print_model_params()
     trainer.train(train_data = train_loader, num_epochs = num_epochs, max_batch=n_test_baches)
