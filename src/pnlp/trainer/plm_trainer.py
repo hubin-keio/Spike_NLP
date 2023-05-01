@@ -160,12 +160,11 @@ class PLM_Trainer:
         for i, batch_data in data_iter:
             if i >= max_batch:
                 break
-
             seq_ids, seqs = batch_data
             tokenized_seqs, mask_idx = self.tokenizer(seqs)
             tokenized_seqs = tokenized_seqs.to(self.device)
             logits = self.model(tokenized_seqs)
-            loss = self.criterion(logits.view(-1,logits.size(-1)), tokenized_seqs.view(-1))
+            loss = self.criterion(logits.view(-1, logits.size(-1)), tokenized_seqs.view(-1))
             if train:
                 self.optim.zero_grad()
                 loss.backward()
@@ -177,11 +176,11 @@ class PLM_Trainer:
         return running_loss
 
     def save_model(self):
-        print(self.save_as)
         if self.save_as:
             file_path = ''.join([self.save_as, '_model_weights.pth'])
             torch.save(self.model.state_dict(), file_path)        
 
+    # TODO: add load_model_parameter()
 
 
 
@@ -194,14 +193,14 @@ if __name__=="__main__":
     print(f'Total seqs in training set: {len(train_dataset)}')
 
 
-    embedding_dim = 12
+    embedding_dim = 36
     dropout=0.1
     max_len = 1500
     mask_prob = 0.15
     n_transformer_layers = 12
     attn_heads = 12
 
-    batch_size = 8
+    batch_size = 10
     lr = 0.0001
     weight_decay = 0.01
     warmup_steps = 1000

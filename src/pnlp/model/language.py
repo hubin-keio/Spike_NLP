@@ -16,11 +16,11 @@ class ProteinMaskedLanguageModel(nn.Module):
 
         super().__init__()
         self.linear = nn.Linear(hidden, vocab_size)
-        self.softmax = nn.LogSoftmax(dim=-1)
+        self.log_softmax = nn.LogSoftmax(dim=-1)
 
     def forward(self, x):
-        x = self.softmax(self.linear(x))
-        return x
+        log_probs = self.log_softmax(self.linear(x))
+        return log_probs
 
 # %%
 class ProteinLM(nn.Module):
