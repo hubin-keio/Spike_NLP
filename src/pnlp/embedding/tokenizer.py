@@ -33,7 +33,7 @@ class ProteinTokenizer(nn.Module):
         mask_prob: probability of token masking. 0.0 for no masking.
         """
         super().__init__()
-        self.max_len = max_len        
+        self.max_len = max_len
         self.mask_prob = mask_prob
 
     def _batch_pad(self, batch_seqs: Sequence[str]) -> torch.Tensor:

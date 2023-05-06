@@ -45,7 +45,7 @@ class TestTrainer(unittest.TestCase):
         n_test_baches = 5
 
         USE_GPU = True
-        SAVE_MODEL = True
+        SAVE_MODEL = False
         device = torch.device("cuda:0" if torch.cuda.is_available() and USE_GPU else "cpu")
         print(f'\nUsing device: {device}')
 
@@ -55,9 +55,12 @@ class TestTrainer(unittest.TestCase):
 
         trainer = PLM_Trainer(SAVE_MODEL, vocab_size, embedding_dim=embedding_dim,
                               dropout=dropout, max_len=max_len,
-                              mask_prob=mask_prob, n_transformer_layers=n_transformer_layers,
-                              n_attn_heads=attn_heads, batch_size=batch_size, lr=lr, betas=betas,
-                              weight_decay=weight_decay, warmup_steps=warmup_steps, device=device)
+                              mask_prob=mask_prob,
+                              n_transformer_layers=n_transformer_layers,
+                              n_attn_heads=attn_heads,
+                              batch_size=batch_size, lr=lr, betas=betas,
+                              weight_decay=weight_decay,
+                              warmup_steps=warmup_steps, device=device)
         # trainer.print_model_params()
  
 

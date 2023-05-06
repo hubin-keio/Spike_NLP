@@ -13,14 +13,12 @@ class ProteinMaskedLanguageModel(nn.Module):
         hidden: input size of the hidden linear layers
         vocab_size: vocabulary size
         """
-
         super().__init__()
         self.linear = nn.Linear(hidden, vocab_size)
         self.log_softmax = nn.LogSoftmax(dim=-1)
 
     def forward(self, x):
-        log_probs = self.log_softmax(self.linear(x))
-        return log_probs
+        return self.log_softmax(self.linear(x))
 
 # %%
 class ProteinLM(nn.Module):

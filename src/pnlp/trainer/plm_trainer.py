@@ -117,7 +117,7 @@ class PLM_Trainer:
         max_batch: maximum number of batches in training. If not defined, all avaiable batches from train_data will be used.
         """
         WRITE = False
-        
+
         if not max_batch:
             max_batch = len(train_loader)
 
@@ -140,7 +140,7 @@ class PLM_Trainer:
                     self.save_model()
         if WRITE:
             fh.close()
-                    
+
 
     def test(self, test_data, num_epochs: int=10):
         self.epoch_iteration(epoch, test_data, train=False)
@@ -166,9 +166,10 @@ class PLM_Trainer:
                 break
             seq_ids, seqs = batch_data
             tokenized_seqs, mask_idx = self.tokenizer(seqs)
-            tokenized_seqs = tokenized_seqs.to(self.device)
-            logits = self.model(tokenized_seqs)
-            loss = self.criterion(logits.view(-1, logits.size(-1)), tokenized_seqs.view(-1))
+            tokenized_seqs = tokenized_seqs.to(self.device)  # input seqs with masks
+            predictions  = self.model(tokenized_seqs)        # model predictions
+            labels = self.tokenizer._batch_pad(seqs).to(self.device)  # original input seqs
+            loss = self.criterion(predictions.view(-1, predictions.size(-1)), labels.view(-1))
             if train:
                 self.optim.zero_grad()
                 loss.backward()
@@ -176,13 +177,13 @@ class PLM_Trainer:
                 self.optim_schedule.step()
             running_loss += (loss.item() if running_loss is None else 0.99 * running_loss + 0.01 * loss.item())
 
-        
+
         return running_loss
 
     def save_model(self):
         if self.save_as:
             file_path = ''.join([self.save_as, '_model_weights.pth'])
-            torch.save(self.model.state_dict(), file_path)        
+            torch.save(self.model.state_dict(), file_path)
 
     # TODO: add load_model_parameter()
 
@@ -216,9 +217,9 @@ if __name__=="__main__":
     vocab_size = len(token_to_index)
     hidden = embedding_dim
 
-    num_epochs = 100
+    num_epochs = 10
     num_workers = 1
-    n_test_baches = 100
+    n_test_baches = 30
 
     USE_GPU = True
     SAVE_MODEL = True
@@ -234,4 +235,4 @@ if __name__=="__main__":
                           n_attn_heads=attn_heads, batch_size=batch_size, lr=lr, betas=betas,
                           weight_decay=weight_decay, warmup_steps=warmup_steps, device=device)
     # trainer.print_model_params()
-    trainer.train(train_data = train_loader, num_epochs = num_epochs, max_batch=n_test_baches)
+    trainer.train(train_data = train_loader, num_epochs = num_epochs, max_batch = n_test_baches)
