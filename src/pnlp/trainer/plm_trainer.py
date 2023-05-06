@@ -54,6 +54,7 @@ class PLM_Trainer:
 
     def __init__(self,
                  save: bool,        # If model will be saved.
+                 vocab_size: int,
                  embedding_dim:int,           # BERT parameters
                  dropout: float,
                  max_len: int,
@@ -115,26 +116,29 @@ class PLM_Trainer:
         num_epochs: number of toal epochs in training.
         max_batch: maximum number of batches in training. If not defined, all avaiable batches from train_data will be used.
         """
+        WRITE = False
+        
         if not max_batch:
             max_batch = len(train_loader)
 
-        if self.save_as:        # TODO: check write access
+        if hasattr(self, 'save_as'):        # TODO: check write access
             loss_history_file = ''.join([self.save_as, '_results.csv'])
             fh = open(loss_history_file, 'w')
             fh.write('epoch, loss\n')
-            
+            WRITE = True
+
         for epoch in range(1, num_epochs + 1):
             running_loss = self.epoch_iteration(epoch, max_batch, train_data, train=True)
 
             if epoch % 1 == 0:
                 print(f'Epoch {epoch}: Average Loss: {running_loss}')
-                if fh:
+                if WRITE:
                     fh.write(f'{epoch}, {running_loss}\n')
 
             if epoch % 10 == 0:
-                if self.save_as:
+                if hasattr(self, 'save_as'):
                     self.save_model()
-        if fh:
+        if WRITE:
             fh.close()
                     
 
@@ -225,7 +229,7 @@ if __name__=="__main__":
     train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, drop_last=True)
 
 
-    trainer = PLM_Trainer(SAVE_MODEL, embedding_dim=embedding_dim, dropout=dropout, max_len=max_len,
+    trainer = PLM_Trainer(SAVE_MODEL, vocab_size, embedding_dim=embedding_dim, dropout=dropout, max_len=max_len,
                           mask_prob=mask_prob, n_transformer_layers=n_transformer_layers,
                           n_attn_heads=attn_heads, batch_size=batch_size, lr=lr, betas=betas,
                           weight_decay=weight_decay, warmup_steps=warmup_steps, device=device)

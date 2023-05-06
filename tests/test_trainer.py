@@ -1,6 +1,13 @@
 """Test PLM Trainer"""
 
 import unittest
+import os.path as path
+
+import torch
+from torch.utils.data import DataLoader
+
+from pnlp.db.dataset import SeqDataset
+from pnlp.embedding.tokenizer import token_to_index
 from pnlp.embedding.tokenizer import ProteinTokenizer
 from pnlp.embedding.nlp_embedding import NLPEmbedding
 from pnlp.trainer.plm_trainer import PLM_Trainer, ScheduledOptim
@@ -13,36 +20,46 @@ class TestTrainer(unittest.TestCase):
         self.train_dataset = SeqDataset(db_file, "train")
         print(f'Test training process using sequence db file: {db_file}')
 
-        def test_plm_trainer(self):
-            embedding_dim = 24
-            dropout=0.1
-            max_len = 1500
-            mask_prob = 0.15
-            lr=0.0001
+    def test_plm_trainer(self):
+        embedding_dim = 36
+        dropout=0.1
+        max_len = 1500
+        mask_prob = 0.15
+        n_transformer_layers = 12
+        attn_heads = 12
 
-            tokenizer = ProteinTokenizer(max_len, mask_prob)
-            embedder = NLPEmbedding(embedding_dim, max_len, dropout)
+        batch_size = 10
+        lr = 0.0001
+        weight_decay = 0.01
+        warmup_steps = 1000
 
-            vocab_size = len(tokenizer.token_to_index)
-            padding_idx = tokenizer.token_to_index['<PAD>']
-            hidden = embedding_dim
-            n_transformer_layers = 12
-            attn_heads = 12
+        betas=(0.9, 0.999)
+        tokenizer = ProteinTokenizer(max_len, mask_prob)
+        embedder = NLPEmbedding(embedding_dim, max_len,dropout)
 
-            batch_size = 32
-            num_workers = 1
+        vocab_size = len(token_to_index)
+        hidden = embedding_dim
 
-            train_loader = DataLoader(train_dataset, batch_size, shuffle=True, drop_last=True)
-            n_test_baches = 5
+        num_epochs = 2
+        num_workers = 1
+        n_test_baches = 5
 
-            trainer = PLM_Trainer(BERT, vocab_dict=vocab_dict, max_len=max_len,
-                          embedding_dim=embedding_dim, n_transformer_layers=n_transformer_layers,
-                          n_attn_heads=attn_heads, dropout=dropout,
-                          mask_prob=mask_prob, batch_size=batch_size,
-                          lr=lr)
-    
-    trainer.train(train_data = train_loader)
-        s
+        USE_GPU = True
+        SAVE_MODEL = True
+        device = torch.device("cuda:0" if torch.cuda.is_available() and USE_GPU else "cpu")
+        print(f'\nUsing device: {device}')
+
+
+        train_loader = DataLoader(self.train_dataset, batch_size=batch_size, shuffle=False, drop_last=True)
+
+
+        trainer = PLM_Trainer(SAVE_MODEL, vocab_size, embedding_dim=embedding_dim,
+                              dropout=dropout, max_len=max_len,
+                              mask_prob=mask_prob, n_transformer_layers=n_transformer_layers,
+                              n_attn_heads=attn_heads, batch_size=batch_size, lr=lr, betas=betas,
+                              weight_decay=weight_decay, warmup_steps=warmup_steps, device=device)
+        # trainer.print_model_params()
+ 
 
 if __name__ == '__main__':
     unittest.main()
