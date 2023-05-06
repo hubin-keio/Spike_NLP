@@ -9,10 +9,10 @@ from torch.utils.data import Dataset, DataLoader
 def initialize_db(db_file_path: str, train_fasta: str, test_fasta: str) -> sqlite3.Connection:
     conn = sqlite3.connect(db_file_path)
     cur = conn.cursor()
-    
+
     cur.execute('''CREATE TABLE train (id INTEGER PRIMARY KEY AUTOINCREMENT, header TEXT, sequence TEXT)''')
     cur.execute('''CREATE TABLE test (id INTEGER PRIMARY KEY AUTOINCREMENT, header TEXT, sequence TEXT)''')
-    
+
     training_seqs = SeqIO.parse(open(train_fasta),'fasta')
 
     for i, fasta in enumerate(training_seqs):
@@ -25,7 +25,7 @@ def initialize_db(db_file_path: str, train_fasta: str, test_fasta: str) -> sqlit
     for i, fasta in enumerate(test_seqs):
         header, seq = fasta.id, str(fasta.seq)
         cur.execute("INSERT INTO test (header, sequence) VALUES (?,?)", (header, seq))
-    conn.commit()    
+    conn.commit()
 
     print(f'Database {db_file_path} initialized.')
     return conn
@@ -44,7 +44,7 @@ class SeqDataset(Dataset):
         self.db_file = db_file
         self.table = table_name
         self.conn = None    # Use lazy loading
-                
+
     def __getitem__(self, idx):
         if self.conn is None:
             self.conn = sqlite3.connect(self.db_file, isolation_level=None)  # Read only operations in sqlite connection.
@@ -52,7 +52,7 @@ class SeqDataset(Dataset):
         cur = self.conn.cursor()
         _, header, sequence = cur.execute(f'''SELECT * FROM {self.table} LIMIT 1 OFFSET {idx}''').fetchone()
 
-        
+
         return header, sequence
 
     def __len__(self):

@@ -27,7 +27,7 @@ for i, fasta in enumerate(training_seqs):
 
 conn.commit()
 conn.close()
-In [8]:
+
 conn = sqlite3.connect("demo.db")
 db_cursor = conn.cursor()
 

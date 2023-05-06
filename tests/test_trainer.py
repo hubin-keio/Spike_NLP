@@ -16,7 +16,7 @@ from pnlp.trainer.plm_trainer import PLM_Trainer, ScheduledOptim
 class TestTrainer(unittest.TestCase):
     def setUp(self):
         db_file = path.abspath(path.dirname(__file__))
-        db_file = path.join(db_file, '../data/SARS_CoV_2_spike.db')
+        db_file = path.join(db_file, '../data/SARS_CoV_2_spike_noX.db')
         self.train_dataset = SeqDataset(db_file, "train")
         print(f'Test training process using sequence db file: {db_file}')
 
@@ -62,7 +62,7 @@ class TestTrainer(unittest.TestCase):
                               weight_decay=weight_decay,
                               warmup_steps=warmup_steps, device=device)
         # trainer.print_model_params()
- 
+
 
 if __name__ == '__main__':
     unittest.main()

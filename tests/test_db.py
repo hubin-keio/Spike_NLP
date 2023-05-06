@@ -10,7 +10,7 @@ from pnlp.db.dataset import SeqDataset
 class TestSeqDataset(unittest.TestCase):
     def setUp(self):
         db_file = path.abspath(path.dirname(__file__))
-        db_file = path.join(db_file, '../data/SARS_CoV_2_spike.db')
+        db_file = path.join(db_file, '../data/SARS_CoV_2_spike_noX.db')
         self.train_dataset = SeqDataset(db_file, "train")
         print(f'Sequence db file: {db_file}')
         print(f'Total seqs in training set: {len(self.train_dataset)}')

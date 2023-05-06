@@ -4,13 +4,15 @@ import os
 import random
 from Bio import SeqIO
 
-def split_fasta(input_fa: str, train_fa: str, test_fa: str):
+def split_fasta(rnd_seed: int, input_fa: str, train_fa: str, test_fa: str):
 
     train_count = 0
     test_count = 0
     total_count = 0
 
     input_records = list(SeqIO.parse(input_fa, 'fasta'))
+
+    random.seed(rnd_seed)
     random.shuffle(input_records)
 
     with open(train_fa, 'w') as ft, open(test_fa, 'w') as fv:
@@ -33,4 +35,5 @@ if __name__ == '__main__':
     train_fa = input_fa.replace('.fasta', '_train.fasta')
     test_fa  = input_fa.replace('.fasta', '_test.fasta')
 
-    split_fasta(input_fa, train_fa, test_fa)
+    rnd_seed = 0
+    split_fasta(rnd_seed, input_fa, train_fa, test_fa)
