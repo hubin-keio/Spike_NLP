@@ -57,7 +57,8 @@ class test_PLM(unittest.TestCase):
             assert len(self.batch_seqs[seq_idx]) >= max_len
             input_seq = self.batch_seqs[seq_idx][:max_len]
             output_seq = ''.join([index_to_token[x.item()] for x in output[seq_idx]])
-            print(f'{seq_idx}\ninput: {input_seq}\noutput: {output_seq}\n')
+            print(f'Test forward: {seq_idx}\ninput: {input_seq}\noutput: {output_seq}\n')
+            
 
 
 if __name__ == '__main__':

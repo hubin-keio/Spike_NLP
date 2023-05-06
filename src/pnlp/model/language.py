@@ -15,14 +15,14 @@ class ProteinMaskedLanguageModel(nn.Module):
         """
         super().__init__()
         self.linear = nn.Linear(hidden, vocab_size)
-        self.log_softmax = nn.LogSoftmax(dim=-1)
+
 
     def forward(self, x):
-        return self.log_softmax(self.linear(x))
+        return self.linear(x)
 
 # %%
 class ProteinLM(nn.Module):
-    """"
+    """
     BERT protein language model
     """
 
