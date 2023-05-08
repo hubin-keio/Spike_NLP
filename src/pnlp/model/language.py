@@ -16,7 +16,6 @@ class ProteinMaskedLanguageModel(nn.Module):
         super().__init__()
         self.linear = nn.Linear(hidden, vocab_size)
 
-
     def forward(self, x):
         return self.linear(x)
 

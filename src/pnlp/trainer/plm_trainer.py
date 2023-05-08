@@ -20,7 +20,11 @@ from pnlp.model.bert import BERT
 
 
 class ScheduledOptim():
-    """A simple wrapper class for learning rate scheduling."""
+    """A simple wrapper class for learning rate scheduling from BERT-pytorch.
+
+    Author: codertimo
+    https://github.com/codertimo/BERT-pytorch/blob/master/bert_pytorch/trainer/optim_schedule.py
+    """
 
     def __init__(self, optimizer, d_model: int, n_warmup_steps):
         self._optimizer=optimizer
@@ -28,7 +32,7 @@ class ScheduledOptim():
         self.n_current_steps = 0
         self.init_lr = np.power(d_model, -0.5)
 
-    def step(self):
+    def step_and_update_lr(self):
         "Step with the inner optimizer"
         self._update_learning_rate()
         self._optimizer.step()
@@ -67,9 +71,7 @@ class PLM_Trainer:
                  betas=(0.9, 0.999),
                  weight_decay: float = 0.01,
                  warmup_steps: int= 10000,
-                 device: str='cpu',
-
-    ):
+                 device: str='cpu'):
 
         if save:
             # create the file name
@@ -80,7 +82,6 @@ class PLM_Trainer:
             self.save_as = f"data_{date}_{hour}_{minute}"
 
         self.device = device
-
 
         # initialize model
         self.tokenizer = ProteinTokenizer(max_len, mask_prob)
@@ -95,7 +96,7 @@ class PLM_Trainer:
                                       weight_decay = weight_decay)
 
         self.optim_schedule = ScheduledOptim(self.optim, embedding_dim, warmup_steps)
-        self.criterion = torch.nn.CrossEntropyLoss()
+        self.criterion = torch.nn.CrossEntropyLoss(reduction='sum')  # sum of CEL at batch level.
 
     def print_model_params(self) -> None:
         total_params = 0
@@ -104,8 +105,6 @@ class PLM_Trainer:
             total_params += num_params
             print(f'{name}: {num_params}')
         print(f'Total number of parameters: {total_params}')
-
-
 
     def train(self, train_data, num_epochs: int, max_batch: Union[int, None]):
         """
@@ -128,19 +127,18 @@ class PLM_Trainer:
             WRITE = True
 
         for epoch in range(1, num_epochs + 1):
-            running_loss = self.epoch_iteration(epoch, max_batch, train_data, train=True)
+            epoch_loss = self.epoch_iteration(epoch, max_batch, train_data, train=True)
 
             if epoch % 1 == 0:
-                print(f'Epoch {epoch}: Average Loss: {running_loss}')
+                print(f'Epoch {epoch}, loss: {epoch_loss}')
                 if WRITE:
-                    fh.write(f'{epoch}, {running_loss}\n')
+                    fh.write(f'{epoch}, {epoch_loss}\n')
 
             if epoch % 10 == 0:
                 if hasattr(self, 'save_as'):
                     self.save_model()
         if WRITE:
             fh.close()
-
 
     def test(self, test_data, num_epochs: int=10):
         self.epoch_iteration(epoch, test_data, train=False)
@@ -159,26 +157,27 @@ class PLM_Trainer:
                             total = len(data_loader),
                             bar_format='{l_bar}{r_bar}')
 
-        running_loss = 0
+        total_epoch_loss = 0
 
         for i, batch_data in data_iter:
             if i >= max_batch:
                 break
             seq_ids, seqs = batch_data
             tokenized_seqs, mask_idx = self.tokenizer(seqs)
-            tokenized_seqs = tokenized_seqs.to(self.device)  # input seqs with masks
+            tokenized_seqs = tokenized_seqs.to(self.device)  # input tokens with masks
             predictions  = self.model(tokenized_seqs)        # model predictions
-            labels = self.tokenizer._batch_pad(seqs).to(self.device)  # original input seqs
-            loss = self.criterion(predictions.view(-1, predictions.size(-1)), labels.view(-1))
+            labels = self.tokenizer._batch_pad(seqs).to(self.device)  # input tokens without masks
+            loss = self.criterion(predictions.transpose(1, 2), labels)
+            total_epoch_loss += loss.item()            
+
             if train:
-                self.optim.zero_grad()
+                self.optim_schedule.zero_grad()
                 loss.backward()
                 torch.nn.utils.clip_grad_norm_(self.model.parameters(), 1.0)
-                self.optim_schedule.step()
-            running_loss += (loss.item() if running_loss is None else 0.99 * running_loss + 0.01 * loss.item())
+                self.optim_schedule.step_and_update_lr()
 
+        return total_epoch_loss
 
-        return running_loss
 
     def save_model(self):
         if self.save_as:
@@ -187,28 +186,26 @@ class PLM_Trainer:
 
     # TODO: add load_model_parameter()
 
-
-
 if __name__=="__main__":
     # Data loader
     db_file = path.abspath(path.dirname(__file__))
-    db_file = path.join(db_file, '../../../data/SARS_CoV_2_spike.db')
+    db_file = path.join(db_file, '../../../data/SARS_CoV_2_spike_noX.db')
     train_dataset = SeqDataset(db_file, "train")
-    print(f'Sequence db file: {db_file}')
+    print(f'Sequence db file: {os.path.basename(db_file)}')
     print(f'Total seqs in training set: {len(train_dataset)}')
 
 
-    embedding_dim = 36
+    embedding_dim = 24
     dropout=0.1
-    max_len = 1500
+    max_len = 150
     mask_prob = 0.15
     n_transformer_layers = 12
     attn_heads = 12
 
-    batch_size = 10
-    lr = 0.0001
+    batch_size = 50
+    lr = 0.01
     weight_decay = 0.01
-    warmup_steps = 1000
+    warmup_steps = 10
 
     betas=(0.9, 0.999)
     tokenizer = ProteinTokenizer(max_len, mask_prob)
@@ -217,9 +214,9 @@ if __name__=="__main__":
     vocab_size = len(token_to_index)
     hidden = embedding_dim
 
-    num_epochs = 10
+    num_epochs = 20
     num_workers = 1
-    n_test_baches = 30
+    n_test_baches = 25
 
     USE_GPU = True
     SAVE_MODEL = True
