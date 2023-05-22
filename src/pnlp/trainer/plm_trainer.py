@@ -127,10 +127,10 @@ class PLM_Trainer:
             WRITE = True
 
         for epoch in range(1, num_epochs + 1):
-            epoch_loss = self.epoch_iteration(epoch, max_batch, train_data, train=True)
+            epoch_loss, masked_accuracy = self.epoch_iteration(epoch, max_batch, train_data, train=True)
 
             if epoch % 1 == 0:
-                print(f'Epoch {epoch}, loss: {epoch_loss}')
+                print(f'Epoch {epoch}, loss: {epoch_loss}, masked_accuracy:{masked_accuracy}')
                 if WRITE:
                     fh.write(f'{epoch}, {epoch_loss}\n')
 
@@ -176,13 +176,35 @@ class PLM_Trainer:
                 torch.nn.utils.clip_grad_norm_(self.model.parameters(), 1.0)
                 self.optim_schedule.step_and_update_lr()
 
-        return total_epoch_loss
+        return total_epoch_loss, self.masked_accuracy(predictions, labels, tokenized_seqs)
 
 
     def save_model(self):
         if self.save_as:
             file_path = ''.join([self.save_as, '_model_weights.pth'])
             torch.save(self.model.state_dict(), file_path)
+            
+    def masked_accuracy(self,logits, labels, mask):
+        
+        """
+        Calculates the accuracy of masked token prediction for BERT.
+
+        Parameters:
+        logits: Raw prediction values from the model. 
+        labels: True label values. Shape: 
+        mask: Mask tensor indicating the locations of the masked tokens.
+
+        Returns:
+        float: The accuracy of the masked token prediction. Ratio of correctly predicted masked tokens to the total number of masked tokens.
+
+        
+        """
+        _, predictions = torch.max(logits, dim=-1) 
+        mask = mask.type(torch.bool) 
+        correct_predictions = (predictions == labels) & mask 
+        accuracy = correct_predictions.sum() / mask.sum() 
+        return accuracy.item()
+        
 
     # TODO: add load_model_parameter()
 
@@ -193,7 +215,6 @@ if __name__=="__main__":
     train_dataset = SeqDataset(db_file, "train")
     print(f'Sequence db file: {os.path.basename(db_file)}')
     print(f'Total seqs in training set: {len(train_dataset)}')
-
 
     embedding_dim = 24
     dropout=0.1
