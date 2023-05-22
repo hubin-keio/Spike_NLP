@@ -132,7 +132,7 @@ class PLM_Trainer:
             if epoch % 1 == 0:
                 print(f'Epoch {epoch}, loss: {epoch_loss}, masked_accuracy:{masked_accuracy}')
                 if WRITE:
-                    fh.write(f'{epoch}, {epoch_loss}\n')
+                    fh.write(f'{epoch}, {epoch_loss}, {masked_accuracy}\n')
 
             if epoch % 10 == 0:
                 if hasattr(self, 'save_as'):
