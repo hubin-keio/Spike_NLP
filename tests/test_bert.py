@@ -33,7 +33,7 @@ class test_BERT(unittest.TestCase):
                      self.mask_prob,
                      self.n_transformer_layers,
                      self.attn_heads)
-        tokenized_seqs, masked_idx = self.tokenizer(self.batch_seqs)
+        tokenized_seqs = self.tokenizer(self.batch_seqs)
         output = model(tokenized_seqs)
         num_parameters = sum(p.numel() for p in model.parameters() if p.requires_grad)
         self.assertEqual(output.size(), (len(self.batch_seqs), self.max_len, self.embedding_dim))

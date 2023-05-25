@@ -23,7 +23,7 @@ class TestTrainer(unittest.TestCase):
     def test_plm_trainer(self):
         embedding_dim = 36
         dropout=0.1
-        max_len = 1500
+        max_len = 150
         mask_prob = 0.15
         n_transformer_layers = 12
         attn_heads = 12
@@ -62,7 +62,7 @@ class TestTrainer(unittest.TestCase):
                               weight_decay=weight_decay,
                               warmup_steps=warmup_steps, device=device)
         # trainer.print_model_params()
-
+        trainer.train(train_data = train_loader, num_epochs = num_epochs, max_batch = n_test_baches)
 
 if __name__ == '__main__':
     unittest.main()

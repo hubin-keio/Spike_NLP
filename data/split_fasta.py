@@ -31,7 +31,7 @@ def split_fasta(rnd_seed: int, input_fa: str, train_fa: str, test_fa: str):
 
 if __name__ == '__main__':
     root_dir = os.path.dirname(__file__)
-    input_fa = os.path.join(root_dir, 'spikeprot0203.clean.uniq.noX.fasta')
+    input_fa = os.path.join(root_dir, 'spikeprot0203.clean.uniq.noX.RBD.fasta')
     train_fa = input_fa.replace('.fasta', '_train.fasta')
     test_fa  = input_fa.replace('.fasta', '_test.fasta')
 

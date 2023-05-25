@@ -44,7 +44,7 @@ class test_PLM(unittest.TestCase):
                     self.attn_heads)
 
         plm = ProteinLM(bert, self.vocab_size)
-        tokenized_seqs, masked_idx = self.tokenizer(self.batch_seqs)
+        tokenized_seqs = self.tokenizer(self.batch_seqs)
         tokenized_seqs = tokenized_seqs[:, :max_len]
         output = plm.forward(tokenized_seqs)
 
@@ -67,17 +67,17 @@ class test_PLM(unittest.TestCase):
         criterion = torch.nn.CrossEntropyLoss()
         softmax = torch.nn.Softmax(dim=-1)
         plm = ProteinLM(bert, self.vocab_size)
-        tokenized_seqs, masked_idx = self.tokenizer(self.batch_seqs)
+        tokenized_seqs = self.tokenizer(self.batch_seqs)
         tokenized_seqs = tokenized_seqs[:, :max_len]
 
         input_unmasked_token_index = self.tokenizer._batch_pad(self.batch_seqs)
         input_unmasked_token_index = input_unmasked_token_index[:, :max_len]
         print(f'Input sequence shape: {input_unmasked_token_index.shape}')
-        
+
         logits = plm.forward(tokenized_seqs)
         logits = logits.reshape(logits.shape[0], self.vocab_size, -1)
         print(f'Model output shape: {logits.shape}')
-        
+
         loss = criterion(logits, input_unmasked_token_index)
 
         print(f'Cross entropy loss: {loss}')
