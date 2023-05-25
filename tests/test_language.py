@@ -34,6 +34,7 @@ class test_PLM(unittest.TestCase):
         self.longest = max([len(seq) for seq in self.batch_seqs])
 
     def test_plm_forward(self):
+        """Test the forward function in the language model"""
         max_len = 50
         bert = BERT(self.embedding_dim,
                     self.dropout,
@@ -46,19 +47,61 @@ class test_PLM(unittest.TestCase):
         tokenized_seqs, masked_idx = self.tokenizer(self.batch_seqs)
         tokenized_seqs = tokenized_seqs[:, :max_len]
         output = plm.forward(tokenized_seqs)
-        output = torch.argmax(output, dim=-1)
 
         num_parameters = sum(p.numel() for p in plm.parameters() if p.requires_grad)
-        self.assertEqual(output.size(), (len(self.batch_seqs), min(self.longest, max_len)))
+        self.assertEqual(output.size(), (len(self.batch_seqs), min(self.longest, max_len), self.vocab_size))
         print(f'Number of parameters: {num_parameters}')
         print(f'Output shape: {output.shape}')
 
-        for seq_idx in range(5):
-            assert len(self.batch_seqs[seq_idx]) >= max_len
-            input_seq = self.batch_seqs[seq_idx][:max_len]
-            output_seq = ''.join([index_to_token[x.item()] for x in output[seq_idx]])
-            print(f'Test forward: {seq_idx}\ninput: {input_seq}\noutput: {output_seq}\n')
-            
+
+    def test_cross_entropy_error(self):
+        """Test cross entropy error"""
+        max_len = 50
+        bert = BERT(self.embedding_dim,
+                    self.dropout,
+                    max_len,
+                    self.mask_prob,
+                    self.n_transformer_layers,
+                    self.attn_heads)
+
+        criterion = torch.nn.CrossEntropyLoss()
+        softmax = torch.nn.Softmax(dim=-1)
+        plm = ProteinLM(bert, self.vocab_size)
+        tokenized_seqs, masked_idx = self.tokenizer(self.batch_seqs)
+        tokenized_seqs = tokenized_seqs[:, :max_len]
+
+        input_unmasked_token_index = self.tokenizer._batch_pad(self.batch_seqs)
+        input_unmasked_token_index = input_unmasked_token_index[:, :max_len]
+        print(f'Input sequence shape: {input_unmasked_token_index.shape}')
+        
+        logits = plm.forward(tokenized_seqs)
+        logits = logits.reshape(logits.shape[0], self.vocab_size, -1)
+        print(f'Model output shape: {logits.shape}')
+        
+        loss = criterion(logits, input_unmasked_token_index)
+
+        print(f'Cross entropy loss: {loss}')
+
+        # for seq_idx in range(5):
+        #     assert len(self.batch_seqs[seq_idx]) >= max_len
+        #     input_seq = self.batch_seqs[seq_idx][:max_len]
+        #     input_unmasked_token_index  = self.tokenizer._batch_pad(input_seq)
+
+
+        #     # print(f'output token index shape: {output_token_index.shape}')
+        #     # output_token_index = [x.item() for x in output_token_index]
+        #     # output_seq = ''.join([index_to_token[x.item()] for x in output_token_index.view(-1)])
+        #     print(f'Shape of logits: {logits[seq_idx].shape}')
+        #     # print(f'Shape of input: {input_unmasked_token_index[seq_idx].reshape(,1).shape}')
+        #     print(input_unmasked_token_index[seq_idx])
+        #     loss = criterion(logits[seq_idx], input_unmasked_token_index[seq_idx])
+
+        #     # print(f'\nTest {seq_idx}')
+        #     # print(f'Input seq: {input_seq}')
+        #     # print(f'Output seq: {output_seq}')
+        #     # print(f'Unmasked input tokens: {input_unmasked_token_index}')
+        #     # print(f'Output tokens: {output_token_index}')
+        #     print(f'CrossEntropyLoss: {loss}')
 
 
 if __name__ == '__main__':

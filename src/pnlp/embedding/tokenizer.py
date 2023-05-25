@@ -56,9 +56,9 @@ class ProteinTokenizer(nn.Module):
                 a_seq.append(token_to_index['<TRUNCATED>'])
             tokenized_seqs.append(a_seq)
 
-        longest_in_bach = max([len(a_seq) for a_seq in tokenized_seqs])  # length of longest sequence in batch
+        longest_in_batch = max([len(a_seq) for a_seq in tokenized_seqs])  # length of longest sequence in batch
         for _, t_seq in enumerate(tokenized_seqs):
-            n_pad = longest_in_bach - len(t_seq)
+            n_pad = longest_in_batch - len(t_seq)
             if n_pad > 0:
                 for p in range(n_pad):
                     t_seq.append(PADDING_IDX)
