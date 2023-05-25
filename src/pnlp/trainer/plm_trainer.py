@@ -2,22 +2,25 @@
 
 import os
 import sys
+import time
 import datetime
+from datetime import date
 from os import path
 from typing import Union
-import sqlite3
+import logging
 import numpy as np
 import tqdm
 import torch
 from torch.utils.data import DataLoader
 import torch.nn as nn
-
+import logging
 from pnlp.db.dataset import SeqDataset, initialize_db
 from pnlp.embedding.tokenizer import ProteinTokenizer, token_to_index, index_to_token
 from pnlp.embedding.nlp_embedding import NLPEmbedding
 from pnlp.model.language import ProteinLM
 from pnlp.model.bert import BERT
 
+logger = logging.getLogger(__name__)
 
 class ScheduledOptim():
     """A simple wrapper class for learning rate scheduling from BERT-pytorch.
@@ -129,6 +132,7 @@ class PLM_Trainer:
             WRITE = True
 
         for epoch in range(1, num_epochs + 1):
+            start_time = time.time()
             epoch_loss, masked_accuracy = self.epoch_iteration(epoch, max_batch, train_data, train=True)
 
             if epoch % 1 == 0:
@@ -139,6 +143,11 @@ class PLM_Trainer:
             if epoch % 10 == 0:
                 if hasattr(self, 'save_as'):
                     self.save_model()
+                    
+            total_epoch_time = time.time() - start_time
+            
+            logger.info(f'Epoch {epoch}, loss: {epoch_loss}, masked_accuracy: {masked_accuracy}, time: {total_epoch_time}')
+            
         if WRITE:
             fh.close()
 
@@ -171,6 +180,7 @@ class PLM_Trainer:
 
             seq_ids, seqs = batch_data
             tokenized_seqs = self.tokenizer(seqs)
+            print(f"TOKENIED SEQS {type(tokenized_seqs)}")
             tokenized_seqs = tokenized_seqs.to(self.device)  # input tokens with masks
             predictions  = self.model(tokenized_seqs)        # model predictions
             labels = self.tokenizer._batch_pad(seqs).to(self.device)  # input tokens without masks
@@ -197,6 +207,7 @@ class PLM_Trainer:
     def save_model(self):
         if self.save_as:
             file_path = ''.join([self.save_as, '_model_weights.pth'])
+            logger.debug("Saving model to {file_path}")
             torch.save(self.model.state_dict(), file_path)
 
     # TODO: add load_model_parameter()
@@ -206,8 +217,16 @@ if __name__=="__main__":
     db_file = path.abspath(path.dirname(__file__))
     db_file = path.join(db_file, '../../../data/SARS_CoV_2_spike_noX_RBD.db')
     train_dataset = SeqDataset(db_file, "train")
-    print(f'Sequence db file: {os.path.basename(db_file)}')
-    print(f'Total seqs in training set: {len(train_dataset)}')
+    logger.info(f'Sequence db file: {os.path.basename(db_file)}')
+    logger.info(f'Total seqs in training set: {len(train_dataset)}')
+    
+    #add logging configuration
+    logging.basicConfig(
+        filename=f'plm_trainer_{date.today()}.log',
+        level=logging.DEBUG, 
+        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+        datefmt='%m/%d/%Y %I:%M:%S %p', 
+    )
 
     embedding_dim = 24
     dropout=0.1
@@ -230,12 +249,23 @@ if __name__=="__main__":
 
     num_epochs = 100
     num_workers = 1
+
     n_test_baches = -1
+    
+    logger.info("MODEL HYPERPARAMETERS")
+    logger.info(f"embedding_dim: {embedding_dim}, dropout: {dropout}, max_len: {max_len}, mask_prob: {mask_prob}, n_transformer_layers: {n_transformer_layers}, n_attn_heads: {attn_heads}")
+    logger.info(f"batch_size: {batch_size}, lr: {lr}, weight_decay: {weight_decay}, warmup_steps: {warmup_steps}")
+    logger.info(f"vocab_size: {vocab_size}, hidden: {hidden}")
+    logger.info(f"num_epochs: {num_epochs}, num_workers: {num_workers}")
+    
 
     USE_GPU = True
     SAVE_MODEL = True
+    if USE_GPU:
+        logger.warning("WARNING: Set to use GPU, if GPU is not available, set USE_GPU to False for CPU computing.")
+        
     device = torch.device("cuda:0" if torch.cuda.is_available() and USE_GPU else "cpu")
-    print(f'\nUsing device: {device}')
+    logger.info(f'Using device: {device}')
 
 
     train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, drop_last=True)
@@ -245,5 +275,7 @@ if __name__=="__main__":
                           mask_prob=mask_prob, n_transformer_layers=n_transformer_layers,
                           n_attn_heads=attn_heads, batch_size=batch_size, lr=lr, betas=betas,
                           weight_decay=weight_decay, warmup_steps=warmup_steps, device=device)
-    # trainer.print_model_params()
+    
+    logger.info(f'Model Parameters: {trainer.print_model_params()}')
+    
     trainer.train(train_data = train_loader, num_epochs = num_epochs, max_batch = n_test_baches)
