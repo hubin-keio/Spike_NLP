@@ -162,10 +162,7 @@ class PLM_Trainer:
         """
         mode = "train" if train else "test"
 
-        logger.debug(f"Model is in {mode} mode")
-
         MASK_TOKEN_IDX = token_to_index['<MASK>']
-        logger.debug(f"Mask Token being used: {MASK_TOKEN_IDX}")
 
         # set the tqdm progress bar
         data_iter = tqdm.tqdm(enumerate(data_loader),
@@ -183,6 +180,7 @@ class PLM_Trainer:
 
             seq_ids, seqs = batch_data
             tokenized_seqs = self.tokenizer(seqs)
+            print(f"TOKENIED SEQS {type(tokenized_seqs)}")
             tokenized_seqs = tokenized_seqs.to(self.device)  # input tokens with masks
             predictions  = self.model(tokenized_seqs)        # model predictions
             labels = self.tokenizer._batch_pad(seqs).to(self.device)  # input tokens without masks
@@ -280,10 +278,3 @@ if __name__=="__main__":
     logger.info(f'Model Parameters: {trainer.print_model_params()}')
     
     trainer.train(train_data = train_loader, num_epochs = num_epochs, max_batch = n_test_baches)
-
-
-
-
-
-
-
