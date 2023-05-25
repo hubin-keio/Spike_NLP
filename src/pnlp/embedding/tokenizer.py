@@ -86,14 +86,11 @@ class ProteinTokenizer(nn.Module):
         SPECIAL_TOKENS = torch.tensor([token_to_index[st] for st in ['<PAD>', '<TRUNCATED>']])
         MASK_IDX = token_to_index['<MASK>']
 
-        masked_idx = []
-
         for _ in range(n_mask):
             idx = int(random.random() * seq_len)
             if not torch.any(torch.isin(batch_masked[:, idx], SPECIAL_TOKENS)):
                 batch_masked[:, idx] = torch.tensor(MASK_IDX)
-                masked_idx.append(idx)
-        return batch_masked, masked_idx
+        return batch_masked
 
     def forward(self, batch_seqs: Sequence[str]):
         """Get token representation for a batch of sequences and index of added <MASK>."""
@@ -102,4 +99,4 @@ class ProteinTokenizer(nn.Module):
             if self.mask_prob > 0:
                 return self._batch_mask(x_padded)
             else:
-                return x_padded, []
+                return x_padded

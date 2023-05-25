@@ -170,7 +170,7 @@ class PLM_Trainer:
                 break
 
             seq_ids, seqs = batch_data
-            tokenized_seqs, mask_idx = self.tokenizer(seqs)
+            tokenized_seqs = self.tokenizer(seqs)
             tokenized_seqs = tokenized_seqs.to(self.device)  # input tokens with masks
             predictions  = self.model(tokenized_seqs)        # model predictions
             labels = self.tokenizer._batch_pad(seqs).to(self.device)  # input tokens without masks
