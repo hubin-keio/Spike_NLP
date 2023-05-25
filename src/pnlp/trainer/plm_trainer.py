@@ -13,8 +13,8 @@ from torch.utils.data import DataLoader
 import torch.nn as nn
 
 from pnlp.db.dataset import SeqDataset, initialize_db
-from pnlp.embedding.tokenizer import ProteinTokenizer
-from pnlp.embedding.nlp_embedding import NLPEmbedding, token_to_index
+from pnlp.embedding.tokenizer import ProteinTokenizer, token_to_index, index_to_token
+from pnlp.embedding.nlp_embedding import NLPEmbedding
 from pnlp.model.language import ProteinLM
 from pnlp.model.bert import BERT
 
@@ -79,7 +79,9 @@ class PLM_Trainer:
             date = now.strftime("%Y-%m-%d")
             hour = now.strftime("%H")
             minute = now.strftime("%M")
-            self.save_as = f"data_{date}_{hour}_{minute}"
+            save_path = os.path.join(os.path.dirname(__file__),
+                                     '../../../results')
+            self.save_as = os.path.join(save_path, f"data_{date}_{hour}_{minute}")
 
         self.device = device
 
@@ -123,14 +125,14 @@ class PLM_Trainer:
         if hasattr(self, 'save_as'):        # TODO: check write access
             loss_history_file = ''.join([self.save_as, '_results.csv'])
             fh = open(loss_history_file, 'w')
-            fh.write('epoch, loss\n')
+            fh.write('epoch, loss, accuracy\n')
             WRITE = True
 
         for epoch in range(1, num_epochs + 1):
             epoch_loss, masked_accuracy = self.epoch_iteration(epoch, max_batch, train_data, train=True)
 
             if epoch % 1 == 0:
-                print(f'Epoch {epoch}, loss: {epoch_loss}, masked_accuracy:{masked_accuracy}')
+                print(f'Epoch {epoch}, loss: {epoch_loss}, masked_accuracy: {masked_accuracy}')
                 if WRITE:
                     fh.write(f'{epoch}, {epoch_loss}, {masked_accuracy}\n')
 
@@ -151,6 +153,8 @@ class PLM_Trainer:
         """
         mode = "train" if train else "test"
 
+        MASK_TOKEN_IDX = token_to_index['<MASK>']
+
         # set the tqdm progress bar
         data_iter = tqdm.tqdm(enumerate(data_loader),
                             desc=f'EP_{mode}: {num_epochs}',
@@ -158,17 +162,20 @@ class PLM_Trainer:
                             bar_format='{l_bar}{r_bar}')
 
         total_epoch_loss = 0
+        total_masked = 0
+        correct_predictions = 0
 
         for i, batch_data in data_iter:
             if i >= max_batch:
                 break
+
             seq_ids, seqs = batch_data
             tokenized_seqs, mask_idx = self.tokenizer(seqs)
             tokenized_seqs = tokenized_seqs.to(self.device)  # input tokens with masks
             predictions  = self.model(tokenized_seqs)        # model predictions
             labels = self.tokenizer._batch_pad(seqs).to(self.device)  # input tokens without masks
             loss = self.criterion(predictions.transpose(1, 2), labels)
-            total_epoch_loss += loss.item()            
+            total_epoch_loss += loss.item()
 
             if train:
                 self.optim_schedule.zero_grad()
@@ -176,55 +183,41 @@ class PLM_Trainer:
                 torch.nn.utils.clip_grad_norm_(self.model.parameters(), 1.0)
                 self.optim_schedule.step_and_update_lr()
 
-        return total_epoch_loss, self.masked_accuracy(predictions, labels, tokenized_seqs)
+            predicted_tokens  = torch.max(predictions, dim=-1)[1]
+            masked_locations = torch.nonzero(torch.eq(tokenized_seqs, MASK_TOKEN_IDX), as_tuple=True)
+            correct_predictions += torch.eq(predicted_tokens[masked_locations],
+                                            labels[masked_locations]).sum().item()
+
+            total_masked += masked_locations[0].numel()
+
+        accuracy = correct_predictions / total_masked
+        return total_epoch_loss, accuracy
 
 
     def save_model(self):
         if self.save_as:
             file_path = ''.join([self.save_as, '_model_weights.pth'])
             torch.save(self.model.state_dict(), file_path)
-            
-    def masked_accuracy(self,logits, labels, mask):
-        
-        """
-        Calculates the accuracy of masked token prediction for BERT.
-
-        Parameters:
-        logits: Raw prediction values from the model. 
-        labels: True label values. Shape: 
-        mask: Mask tensor indicating the locations of the masked tokens.
-
-        Returns:
-        float: The accuracy of the masked token prediction. Ratio of correctly predicted masked tokens to the total number of masked tokens.
-
-        
-        """
-        _, predictions = torch.max(logits, dim=-1) 
-        mask = mask.type(torch.bool) 
-        correct_predictions = (predictions == labels) & mask 
-        accuracy = correct_predictions.sum() / mask.sum() 
-        return accuracy.item()
-        
 
     # TODO: add load_model_parameter()
 
 if __name__=="__main__":
     # Data loader
     db_file = path.abspath(path.dirname(__file__))
-    db_file = path.join(db_file, '../../../data/SARS_CoV_2_spike_noX.db')
+    db_file = path.join(db_file, '../../../data/SARS_CoV_2_spike_noX_RBD.db')
     train_dataset = SeqDataset(db_file, "train")
     print(f'Sequence db file: {os.path.basename(db_file)}')
     print(f'Total seqs in training set: {len(train_dataset)}')
 
     embedding_dim = 24
     dropout=0.1
-    max_len = 150
+    max_len = 280
     mask_prob = 0.15
     n_transformer_layers = 12
     attn_heads = 12
 
     batch_size = 50
-    lr = 0.01
+    lr = 0.0001
     weight_decay = 0.01
     warmup_steps = 10
 
@@ -235,9 +228,9 @@ if __name__=="__main__":
     vocab_size = len(token_to_index)
     hidden = embedding_dim
 
-    num_epochs = 20
+    num_epochs = 100
     num_workers = 1
-    n_test_baches = 25
+    n_test_baches = 50
 
     USE_GPU = True
     SAVE_MODEL = True
