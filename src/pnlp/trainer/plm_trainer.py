@@ -166,7 +166,7 @@ class PLM_Trainer:
         correct_predictions = 0
 
         for i, batch_data in data_iter:
-            if i >= max_batch:
+            if max_batch > 0 and i >= max_batch:
                 break
 
             seq_ids, seqs = batch_data
@@ -230,7 +230,7 @@ if __name__=="__main__":
 
     num_epochs = 100
     num_workers = 1
-    n_test_baches = 50
+    n_test_baches = -1
 
     USE_GPU = True
     SAVE_MODEL = True
