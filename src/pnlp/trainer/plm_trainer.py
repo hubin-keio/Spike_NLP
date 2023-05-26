@@ -22,6 +22,7 @@ from pnlp.model.bert import BERT
 
 logger = logging.getLogger(__name__)
 
+
 class ScheduledOptim():
     """A simple wrapper class for learning rate scheduling from BERT-pytorch.
 
@@ -103,13 +104,12 @@ class PLM_Trainer:
         self.optim_schedule = ScheduledOptim(self.optim, embedding_dim, warmup_steps)
         self.criterion = torch.nn.CrossEntropyLoss(reduction='sum')  # sum of CEL at batch level.
 
-    def print_model_params(self) -> None:
-        total_params = 0
-        for name, param in self.model.named_parameters():
-            num_params = param.numel()
-            total_params += num_params
-            print(f'{name}: {num_params}')
-        print(f'Total number of parameters: {total_params}')
+    def count_parameters_with_gradidents(self) -> int:
+        count = 0
+        for param in self.model.parameters():
+            if param.requires_grad:
+                count += param.numel()
+        return count
 
     def train(self, train_data, num_epochs: int, max_batch: Union[int, None]):
         """
@@ -143,11 +143,11 @@ class PLM_Trainer:
             if epoch % 10 == 0:
                 if hasattr(self, 'save_as'):
                     self.save_model()
-                    
+
             total_epoch_time = time.time() - start_time
-            
+
             logger.info(f'Epoch {epoch}, loss: {epoch_loss}, masked_accuracy: {masked_accuracy}, time: {total_epoch_time}')
-            
+
         if WRITE:
             fh.close()
 
@@ -206,7 +206,6 @@ class PLM_Trainer:
     def save_model(self):
         if self.save_as:
             file_path = ''.join([self.save_as, '_model_weights.pth'])
-            logger.debug("Saving model to {file_path}")
             torch.save(self.model.state_dict(), file_path)
 
     # TODO: add load_model_parameter()
@@ -216,17 +215,24 @@ if __name__=="__main__":
     db_file = path.abspath(path.dirname(__file__))
     db_file = path.join(db_file, '../../../data/SARS_CoV_2_spike_noX_RBD.db')
     train_dataset = SeqDataset(db_file, "train")
+
     logger.info(f'Sequence db file: {os.path.basename(db_file)}')
     logger.info(f'Total seqs in training set: {len(train_dataset)}')
-    
+
+    now = datetime.datetime.now()
+    date_hour_minute = now.strftime("%Y-%m-%d_%H-%M")
+
+
+    log_file = os.path.join(os.path.dirname(__file__),
+                                     '../../../results')
+    log_file = os.path.join(log_file, f'{date_hour_minute}.log')
+
     #add logging configuration
     logging.basicConfig(
-        filename=f'plm_trainer_{date.today()}.log',
-        level=logging.DEBUG, 
-        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-        datefmt='%m/%d/%Y %I:%M:%S %p', 
-    )
-
+        filename = log_file,
+        level = logging.DEBUG,
+        format = '%(asctime)s - %(levelname)s - %(message)s',
+        datefmt = '%m/%d/%Y %I:%M:%S %p')
 
     embedding_dim = 768
     dropout=0.1
@@ -234,48 +240,51 @@ if __name__=="__main__":
     mask_prob = 0.15
     n_transformer_layers = 12
     attn_heads = 12
+    hidden = embedding_dim
 
     batch_size = 50
+    n_test_baches = 10
+    num_epochs = 10
+
     lr = 0.0001
     weight_decay = 0.01
     warmup_steps = 10
-
     betas=(0.9, 0.999)
+
     tokenizer = ProteinTokenizer(max_len, mask_prob)
     embedder = NLPEmbedding(embedding_dim, max_len,dropout)
-
     vocab_size = len(token_to_index)
-    hidden = embedding_dim
 
-    num_epochs = 100
-    num_workers = 1
-
-    n_test_baches = 20
-    
-    logger.info("MODEL HYPERPARAMETERS")
-    logger.info(f"embedding_dim: {embedding_dim}, dropout: {dropout}, max_len: {max_len}, mask_prob: {mask_prob}, n_transformer_layers: {n_transformer_layers}, n_attn_heads: {attn_heads}")
-    logger.info(f"batch_size: {batch_size}, lr: {lr}, weight_decay: {weight_decay}, warmup_steps: {warmup_steps}")
-    logger.info(f"vocab_size: {vocab_size}, hidden: {hidden}")
-    logger.info(f"num_epochs: {num_epochs}, num_workers: {num_workers}")
-    
-
-    USE_GPU = True
     SAVE_MODEL = True
-    if USE_GPU:
-        logger.warning("WARNING: Set to use GPU, if GPU is not available, set USE_GPU to False for CPU computing.")
-        
-    device = torch.device("cuda:0" if torch.cuda.is_available() and USE_GPU else "cpu")
-    logger.info(f'Using device: {device}')
+    USE_GPU = True
 
+    device = torch.device("cuda:0" if torch.cuda.is_available() and USE_GPU else "cpu")
 
     train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, drop_last=True)
 
-
-    trainer = PLM_Trainer(SAVE_MODEL, vocab_size, embedding_dim=embedding_dim, dropout=dropout, max_len=max_len,
-                          mask_prob=mask_prob, n_transformer_layers=n_transformer_layers,
+    trainer = PLM_Trainer(SAVE_MODEL, vocab_size, embedding_dim=embedding_dim,
+                          dropout=dropout, max_len=max_len, mask_prob=mask_prob,
+                          n_transformer_layers=n_transformer_layers,
                           n_attn_heads=attn_heads, batch_size=batch_size, lr=lr, betas=betas,
                           weight_decay=weight_decay, warmup_steps=warmup_steps, device=device)
-    
-    logger.info(f'Model Parameters: {trainer.print_model_params()}')
-    
+
+    logger.info(f'Using device: {device}')
+    logger.info(f'Data set: {os.path.basename(db_file)}')
+    logger.info(f'num_epochs: {num_epochs}')
+    logger.info(f'n_test_baches: {n_test_baches}')
+    logger.info(f'batch_size: {batch_size}')
+    logger.info(f'embedding_dim: {embedding_dim}')
+    logger.info(f'dropout: {dropout}')
+    logger.info(f'max_len: {max_len}')
+    logger.info(f'mask_prob: {mask_prob}')
+    logger.info(f'n_transformer_layers: {n_transformer_layers}')
+    logger.info(f'n_attn_heads: {attn_heads}')
+    logger.info(f'lr: {lr}')
+    logger.info(f'weight_decay: {weight_decay}')
+    logger.info(f'warmup_steps: {warmup_steps}')
+    logger.info(f'vocab_size: {vocab_size}')
+    logger.info(f'hidden: {hidden}')
+
+    logger.info(f'Number of parameters: {"{:,.0f}".format(trainer.count_parameters_with_gradidents())}')
+
     trainer.train(train_data = train_loader, num_epochs = num_epochs, max_batch = n_test_baches)

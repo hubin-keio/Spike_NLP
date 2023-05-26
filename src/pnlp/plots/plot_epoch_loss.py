@@ -22,7 +22,7 @@ def plot_epoch_loss(csv_name:str, save: bool=True):
     ax2.plot(df['epoch'], df['accuracy'], color='blue')
     ax2.set_ylabel('Accuracy', color='blue')
 
-    fname = os.path.basename(csv_name) + '.pdf'
+    fname = os.path.basename(csv_name) + '.png'
 
     if save:
         plt.savefig(fname)
