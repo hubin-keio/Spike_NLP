@@ -4,7 +4,7 @@ import os
 import pandas as pd
 import matplotlib.pyplot as plt
 
-def plot_epoch_loss(csv_name):
+def plot_epoch_loss(csv_name:str, save: bool=True):
     df = pd.read_csv(csv_name)
     df.columns = df.columns.str.strip()
     print(df)# Set ggplot style
@@ -21,6 +21,11 @@ def plot_epoch_loss(csv_name):
     ax2 = ax1.twinx()
     ax2.plot(df['epoch'], df['accuracy'], color='blue')
     ax2.set_ylabel('Accuracy', color='blue')
+
+    fname = os.path.basename(csv_name) + '.pdf'
+
+    if save:
+        plt.savefig(fname)
     
     plt.show()
 
@@ -28,3 +33,4 @@ def plot_epoch_loss(csv_name):
 # if __name__ == '__main__':
 #     f_name = os.path.dirname(__file__)
 #     f_name = os.path.join(f_name, '../../pn
+

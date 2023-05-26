@@ -27,7 +27,7 @@ class TestAttention(unittest.TestCase):
         self.longest = max([len(seq) for seq in self.batch_seqs])
 
     def test_single_head_attention(self):
-        tokenized_seqs, _ = self.tokenizer(self.batch_seqs)
+        tokenized_seqs = self.tokenizer(self.batch_seqs)
         embedded_seq, mask = self.embedder(tokenized_seqs)
         query = key = value = embedded_seq
 
@@ -45,7 +45,7 @@ class TestAttention(unittest.TestCase):
         print(y)
 
     def test_multi_head_attention(self):
-        tokenized_seqs, _ = self.tokenizer(self.batch_seqs)
+        tokenized_seqs = self.tokenizer(self.batch_seqs)
         embedded_seq, mask = self.embedder(tokenized_seqs)
         query = key = value = embedded_seq
 
