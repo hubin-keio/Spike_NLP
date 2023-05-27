@@ -1,4 +1,4 @@
-"""Protein Language Model Trainer"""
+"""Model Runner"""
 
 import os
 import sys
@@ -19,6 +19,7 @@ from pnlp.embedding.tokenizer import ProteinTokenizer, token_to_index, index_to_
 from pnlp.embedding.nlp_embedding import NLPEmbedding
 from pnlp.model.language import ProteinLM
 from pnlp.model.bert import BERT
+from pnlp.plots import plot_run
 
 logger = logging.getLogger(__name__)
 
@@ -58,7 +59,7 @@ class ScheduledOptim():
         for param_group in self._optimizer.param_groups:
             param_group['lr'] = lr
 
-class PLM_Trainer:
+class Model_Runner:
 
     def __init__(self,
                  save: bool,        # If model will be saved.
@@ -80,12 +81,11 @@ class PLM_Trainer:
         if save:
             # create the file name
             now = datetime.datetime.now()
-            date = now.strftime("%Y-%m-%d")
-            hour = now.strftime("%H")
-            minute = now.strftime("%M")
+            date_hour_minute = now.strftime("%Y-%m-%d_%H_%M")
+
             save_path = os.path.join(os.path.dirname(__file__),
                                      '../../../results')
-            self.save_as = os.path.join(save_path, f"data_{date}_{hour}_{minute}")
+            self.save_as = os.path.join(save_path, date_hour_minute)
 
         self.device = device
 
@@ -111,7 +111,7 @@ class PLM_Trainer:
                 count += param.numel()
         return count
 
-    def train(self, train_data, num_epochs: int, max_batch: Union[int, None]):
+    def run(self, train_data:SeqDataset, test_data:SeqDataset, num_epochs: int, max_batch: Union[int, None]):
         """
         Model training
 
@@ -126,19 +126,22 @@ class PLM_Trainer:
             max_batch = len(train_loader)
 
         if hasattr(self, 'save_as'):        # TODO: check write access
-            loss_history_file = ''.join([self.save_as, '_results.csv'])
-            fh = open(loss_history_file, 'w')
-            fh.write('epoch, loss, accuracy\n')
+            run_result_csv = ''.join([self.save_as, '_results.csv'])
+            fh = open(run_result_csv, 'w')
+            fh.write('epoch, train_loss, train_accuracy, test_loss, test_accuracy\n')
             WRITE = True
 
         for epoch in range(1, num_epochs + 1):
             start_time = time.time()
-            epoch_loss, masked_accuracy = self.epoch_iteration(epoch, max_batch, train_data, train=True)
+            train_loss, train_accuracy = self.epoch_iteration(epoch, max_batch, train_data, train=True)
+            test_loss, test_accuracy = self.epoch_iteration(epoch, max_batch, test_data, train=False)
 
-            if epoch % 1 == 0:
-                print(f'Epoch {epoch}, loss: {epoch_loss}, masked_accuracy: {masked_accuracy}')
+
+            if epoch < 11 or epoch % 10 == 0:
+                msg = f'Epoch {epoch}, train loss: {train_loss:.2f}, train accuracy: {train_accuracy:.2f}, test loss: {test_loss:.2f}, test accuracy: {test_accuracy:.2f}'
+                print(msg)
                 if WRITE:
-                    fh.write(f'{epoch}, {epoch_loss}, {masked_accuracy}\n')
+                    fh.write(f'{epoch}, {train_loss:.2f}, {train_accuracy:.2f}, {test_loss:.2f}, {test_accuracy:.2f}\n')
 
             if epoch % 10 == 0:
                 if hasattr(self, 'save_as'):
@@ -146,13 +149,12 @@ class PLM_Trainer:
 
             total_epoch_time = time.time() - start_time
 
-            logger.info(f'Epoch {epoch}, loss: {epoch_loss}, masked_accuracy: {masked_accuracy}, time: {total_epoch_time}')
+            logger.info(f'{msg}, time: {total_epoch_time}')
 
         if WRITE:
             fh.close()
-
-    def test(self, test_data, num_epochs: int=10):
-        self.epoch_iteration(epoch, test_data, train=False)
+            plot_run.plot_run(run_result_csv, save=True)
+            print(f'\nRun result saved to {os.path.basename(run_result_csv)}\n')
 
     def epoch_iteration(self, num_epochs: int, max_batch: int, data_loader, train: bool=True):
         """
@@ -208,7 +210,14 @@ class PLM_Trainer:
             file_path = ''.join([self.save_as, '_model_weights.pth'])
             torch.save(self.model.state_dict(), file_path)
 
-    # TODO: add load_model_parameter()
+    def load_model_parameter(self, pth:str):
+        '''
+        Load a saved model status dictionary.
+
+        pth: saved model state dictionary file (.pth file in results directory)
+        '''
+        self.model.load_state_dict(torch.load(pth))
+        
 
 if __name__=="__main__":
     # Data loader
@@ -244,8 +253,8 @@ if __name__=="__main__":
     hidden = embedding_dim
 
     batch_size = 50
-    n_test_baches = 10
-    num_epochs = 10
+    n_test_baches = 100
+    num_epochs = 50
 
     lr = 0.0001
     weight_decay = 0.01
@@ -262,8 +271,9 @@ if __name__=="__main__":
     device = torch.device("cuda:0" if torch.cuda.is_available() and USE_GPU else "cpu")
 
     train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, drop_last=True)
+    test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=True, drop_last=True)
 
-    trainer = PLM_Trainer(SAVE_MODEL, vocab_size, embedding_dim=embedding_dim,
+    runner = Model_Runner(SAVE_MODEL, vocab_size, embedding_dim=embedding_dim,
                           dropout=dropout, max_len=max_len, mask_prob=mask_prob,
                           n_transformer_layers=n_transformer_layers,
                           n_attn_heads=attn_heads, batch_size=batch_size, lr=lr, betas=betas,
@@ -286,6 +296,7 @@ if __name__=="__main__":
     logger.info(f'vocab_size: {vocab_size}')
     logger.info(f'hidden: {hidden}')
 
-    logger.info(f'Number of parameters: {"{:,.0f}".format(trainer.count_parameters_with_gradidents())}')
+    logger.info(f'Number of parameters: {"{:,.0f}".format(runner.count_parameters_with_gradidents())}')
 
-    trainer.train(train_data = train_loader, num_epochs = num_epochs, max_batch = n_test_baches)
+    runner.run(train_data = train_loader, test_data = test_loader,
+               num_epochs = num_epochs, max_batch = n_test_baches)
