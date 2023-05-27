@@ -37,10 +37,10 @@ def plot_run(csv_name:str, save: bool=True) -> Figure:
     # legend
     all_lines = train_loss_line + test_loss_line + train_accuracy_line + test_accuracy_line
     all_labels = [line.get_label() for line in all_lines]
-    ax1.legend(all_lines, all_labels, loc='upper center')
+    ax1.legend(all_lines, all_labels, loc='center right')
 
     if save:
-        fname = csv_name.replace('.csv', '.png')        
+        fname = csv_name.replace('.csv', '.png')
         plt.savefig(fname)
 
     return fig

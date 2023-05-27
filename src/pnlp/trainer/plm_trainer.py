@@ -215,6 +215,7 @@ if __name__=="__main__":
     db_file = path.abspath(path.dirname(__file__))
     db_file = path.join(db_file, '../../../data/SARS_CoV_2_spike_noX_RBD.db')
     train_dataset = SeqDataset(db_file, "train")
+    test_dataset = SeqDataset(db_file, "test")
 
     logger.info(f'Sequence db file: {os.path.basename(db_file)}')
     logger.info(f'Total seqs in training set: {len(train_dataset)}')

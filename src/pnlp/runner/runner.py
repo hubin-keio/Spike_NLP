@@ -79,10 +79,10 @@ class Model_Runner:
                  device: str='cpu'):
 
         if save:
-            # create the file name            
+            # create the file name
             now = datetime.datetime.now()
             date_hour_minute = now.strftime("%Y-%m-%d_%H_%M")
-            
+
             save_path = os.path.join(os.path.dirname(__file__),
                                      '../../../results')
             self.save_as = os.path.join(save_path, date_hour_minute)
@@ -135,7 +135,7 @@ class Model_Runner:
             start_time = time.time()
             train_loss, train_accuracy = self.epoch_iteration(epoch, max_batch, train_data, train=True)
             test_loss, test_accuracy = self.epoch_iteration(epoch, max_batch, test_data, train=False)
-            
+
 
             if epoch < 11 or epoch % 10 == 0:
                 msg = f'Epoch {epoch}, train loss: {train_loss:.2f}, train accuracy: {train_accuracy:.2f}, test loss: {test_loss:.2f}, test accuracy: {test_accuracy:.2f}'
@@ -246,8 +246,8 @@ if __name__=="__main__":
     hidden = embedding_dim
 
     batch_size = 50
-    n_test_baches = 10
-    num_epochs = 10
+    n_test_baches = 100
+    num_epochs = 50
 
     lr = 0.0001
     weight_decay = 0.01
@@ -264,7 +264,7 @@ if __name__=="__main__":
     device = torch.device("cuda:0" if torch.cuda.is_available() and USE_GPU else "cpu")
 
     train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, drop_last=True)
-    test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=True, drop_last=True)    
+    test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=True, drop_last=True)
 
     runner = Model_Runner(SAVE_MODEL, vocab_size, embedding_dim=embedding_dim,
                           dropout=dropout, max_len=max_len, mask_prob=mask_prob,
