@@ -210,7 +210,14 @@ class Model_Runner:
             file_path = ''.join([self.save_as, '_model_weights.pth'])
             torch.save(self.model.state_dict(), file_path)
 
-    # TODO: add load_model_parameter()
+    def load_model_parameter(self, pth:str):
+        '''
+        Load a saved model status dictionary.
+
+        pth: saved model state dictionary file (.pth file in results directory)
+        '''
+        self.model.load_state_dict(torch.load(pth))
+        
 
 if __name__=="__main__":
     # Data loader
