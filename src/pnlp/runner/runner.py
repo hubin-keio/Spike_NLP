@@ -4,6 +4,7 @@ import os
 import sys
 import time
 import datetime
+import random
 from datetime import date
 from os import path
 from typing import Union
@@ -88,6 +89,18 @@ class Model_Runner:
             self.save_as = os.path.join(save_path, date_hour_minute)
 
         self.device = device
+        self.vocab_size = vocab_size
+        self.embedding_dim = embedding_dim
+        self.dropout = dropout
+        self.max_len = max_len
+        self.mask_prob = mask_prob
+        self.n_transformer_layers = n_transformer_layers
+        self.n_attn_heads = n_attn_heads
+        self.batch_size = batch_size
+        self.init_lr = lr
+        self.betas = betas
+        self.weight_decay = weight_decay
+        self.warmup_steps = warmup_steps
 
         # initialize model
         self.tokenizer = ProteinTokenizer(max_len, mask_prob)
@@ -143,7 +156,7 @@ class Model_Runner:
                 if WRITE:
                     fh.write(f'{epoch}, {train_loss:.2f}, {train_accuracy:.2f}, {test_loss:.2f}, {test_accuracy:.2f}\n')
 
-            if epoch % 10 == 0:
+            if epoch % 2 == 0:
                 if hasattr(self, 'save_as'):
                     self.save_model()
 
@@ -208,16 +221,67 @@ class Model_Runner:
     def save_model(self):
         if self.save_as:
             file_path = ''.join([self.save_as, '_model_weights.pth'])
-            torch.save(self.model.state_dict(), file_path)
 
-    def load_model_parameter(self, pth:str):
+            hyperparameters = {
+                'device' : self.device,
+                'vocab_size' : self.vocab_size,
+                'embedding_dim' : self.embedding_dim,
+                'dropout' : self.dropout,
+                'max_len' : self.max_len,
+                'mask_pro' : self.mask_prob,
+                'n_transformer_layers' : n_transformer_layers,
+                'n_attn_heads' : self.n_attn_heads,
+                'batch_size' : self.batch_size,
+                'init_lr' : self.init_lr,
+                'betas' : self.betas,
+                'weight_decay' : self.weight_decay,
+                'warmup_steps' : self.warmup_steps
+                }
+
+            state = {'hyperparameters': hyperparameters,
+                     'rng_state': torch.get_rng_state(),  # torch random number state.
+                     'random_state': random.getstate(),
+                     'model_state_dict': self.model.state_dict()}
+
+            torch.save(state, file_path)
+
+    def load_model_parameters(self, pth:str):
         '''
         Load a saved model status dictionary.
 
         pth: saved model state dictionary file (.pth file in results directory)
+
+        # TODO: need to call dataloader.load_state_dict with saved dataloader state. But
+        https://github.com/pytorch/pytorch/blob/main/torch/utils/data/dataloader.py says
+        the __getstate__ is not implemented.
+
+
         '''
-        self.model.load_state_dict(torch.load(pth))
+        saved_state = torch.load(pth, map_location=self.device)
+        saved_hyperparameters = saved_state['hyperparameters']
+        if saved_state_device != self.device:
+            msg = f'Map saved status from {saved_hyperparameters["device"]} to {self.device}.'
+            logger.warning(msg)
+            
         
+        assert self.vocab_size == saved_hyperparameters['vocab_size']
+        assert self.embedding_dim == saved_hyperparameters['embedding_dim']
+        assert self.dropout == saved_hyperparameters['dropout']
+        assert self.max_len == saved_hyperparameters['max_len']
+        assert self.mask_prob == saved_hyperparameters['mask_prob']
+        assert self.n_transformer_layers == saved_hyperparameters['n_transformer_layers']
+        assert self.n_attn_heads == saved_hyperparameters['n_attn_heads']
+        assert self.batch_size == saved_hyperparameters['batch_size']
+        assert self.init_lr == saved_hyperparameters['lr']
+        assert self.betas == saved_hyperparameters['betas']
+        assert self.weight_decay == saved_hyperparameters['weight_decay']
+        assert self.warmup_steps == saved_hyperparameters['warmup_steps']
+        
+        self.model.load_state_dict(saved_state['model_state_dict'])
+        random.setstate(saved_state['random_state'])
+        torch.set_rng_state(saved_state['rng_state'])  # restore random number state.
+        
+
 
 if __name__=="__main__":
     # Data loader
@@ -240,9 +304,9 @@ if __name__=="__main__":
     #add logging configuration
     logging.basicConfig(
         filename = log_file,
-        level = logging.DEBUG,
         format = '%(asctime)s - %(levelname)s - %(message)s',
         datefmt = '%m/%d/%Y %I:%M:%S %p')
+    logger.setLevel(logging.DEBUG)  # To disable the matplotlib font_manager logs.
 
     embedding_dim = 768
     dropout=0.1
@@ -254,7 +318,7 @@ if __name__=="__main__":
 
     batch_size = 50
     n_test_baches = 100
-    num_epochs = 50
+    num_epochs = 2
 
     lr = 0.0001
     weight_decay = 0.01
@@ -270,6 +334,7 @@ if __name__=="__main__":
 
     device = torch.device("cuda:0" if torch.cuda.is_available() and USE_GPU else "cpu")
 
+    torch.manual_seed(0)        # Dataloader uses its own random number generator.
     train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, drop_last=True)
     test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=True, drop_last=True)
 
