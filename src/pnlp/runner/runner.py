@@ -196,16 +196,25 @@ class Model_Runner:
             seq_ids, seqs = batch_data
             tokenized_seqs = self.tokenizer(seqs)
             tokenized_seqs = tokenized_seqs.to(self.device)  # input tokens with masks
-            predictions  = self.model(tokenized_seqs)        # model predictions
             labels = self.tokenizer._batch_pad(seqs).to(self.device)  # input tokens without masks
-            loss = self.criterion(predictions.transpose(1, 2), labels)
-            total_epoch_loss += loss.item()
 
-            if train:
+            if mode == 'train':  # train mode
+                predictions  = self.model(tokenized_seqs)
+                loss = self.criterion(predictions.transpose(1, 2), labels)                
                 self.optim_schedule.zero_grad()
                 loss.backward()
                 torch.nn.utils.clip_grad_norm_(self.model.parameters(), 1.0)
                 self.optim_schedule.step_and_update_lr()
+
+            else:               # test mode
+                self.model.eval()
+                with torch.no_grad():
+                    predictions  = self.model(tokenized_seqs)
+                loss = self.criterion(predictions.transpose(1, 2), labels)
+                self.model.train()   # set the model back to training mode
+
+
+            total_epoch_loss += loss.item()
 
             predicted_tokens  = torch.max(predictions, dim=-1)[1]
             masked_locations = torch.nonzero(torch.eq(tokenized_seqs, MASK_TOKEN_IDX), as_tuple=True)
@@ -262,8 +271,8 @@ class Model_Runner:
         if saved_state_device != self.device:
             msg = f'Map saved status from {saved_hyperparameters["device"]} to {self.device}.'
             logger.warning(msg)
-            
-        
+
+
         assert self.vocab_size == saved_hyperparameters['vocab_size']
         assert self.embedding_dim == saved_hyperparameters['embedding_dim']
         assert self.dropout == saved_hyperparameters['dropout']
@@ -276,11 +285,11 @@ class Model_Runner:
         assert self.betas == saved_hyperparameters['betas']
         assert self.weight_decay == saved_hyperparameters['weight_decay']
         assert self.warmup_steps == saved_hyperparameters['warmup_steps']
-        
+
         self.model.load_state_dict(saved_state['model_state_dict'])
         random.setstate(saved_state['random_state'])
         torch.set_rng_state(saved_state['rng_state'])  # restore random number state.
-        
+
 
 
 if __name__=="__main__":
