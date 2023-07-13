@@ -24,7 +24,6 @@ from pnlp.plots import plot_run
 
 logger = logging.getLogger(__name__)
 
-
 class ScheduledOptim():
     """A simple wrapper class for learning rate scheduling from BERT-pytorch.
 
@@ -149,7 +148,6 @@ class Model_Runner:
             train_loss, train_accuracy = self.epoch_iteration(epoch, max_batch, train_data, train=True)
             test_loss, test_accuracy = self.epoch_iteration(epoch, max_batch, test_data, train=False)
 
-
             if epoch < 11 or epoch % 10 == 0:
                 msg = f'Epoch {epoch}, train loss: {train_loss:.2f}, train accuracy: {train_accuracy:.2f}, test loss: {test_loss:.2f}, test accuracy: {test_accuracy:.2f}'
                 print(msg)
@@ -237,8 +235,8 @@ class Model_Runner:
                 'embedding_dim' : self.embedding_dim,
                 'dropout' : self.dropout,
                 'max_len' : self.max_len,
-                'mask_pro' : self.mask_prob,
-                'n_transformer_layers' : n_transformer_layers,
+                'mask_prob' : self.mask_prob,
+                'n_transformer_layers' : self.n_transformer_layers,
                 'n_attn_heads' : self.n_attn_heads,
                 'batch_size' : self.batch_size,
                 'init_lr' : self.init_lr,
@@ -263,12 +261,10 @@ class Model_Runner:
         # TODO: need to call dataloader.load_state_dict with saved dataloader state. But
         https://github.com/pytorch/pytorch/blob/main/torch/utils/data/dataloader.py says
         the __getstate__ is not implemented.
-
-
         '''
         saved_state = torch.load(pth, map_location=self.device)
         saved_hyperparameters = saved_state['hyperparameters']
-        if saved_state_device != self.device:
+        if saved_hyperparameters["device"] != self.device:
             msg = f'Map saved status from {saved_hyperparameters["device"]} to {self.device}.'
             logger.warning(msg)
 
@@ -281,7 +277,7 @@ class Model_Runner:
         assert self.n_transformer_layers == saved_hyperparameters['n_transformer_layers']
         assert self.n_attn_heads == saved_hyperparameters['n_attn_heads']
         assert self.batch_size == saved_hyperparameters['batch_size']
-        assert self.init_lr == saved_hyperparameters['lr']
+        assert self.init_lr == saved_hyperparameters['init_lr']
         assert self.betas == saved_hyperparameters['betas']
         assert self.weight_decay == saved_hyperparameters['weight_decay']
         assert self.warmup_steps == saved_hyperparameters['warmup_steps']
@@ -326,8 +322,8 @@ if __name__=="__main__":
     hidden = embedding_dim
 
     batch_size = 50
-    n_test_baches = 100
-    num_epochs = 2
+    n_test_baches = -1
+    num_epochs = 100
 
     lr = 0.0001
     weight_decay = 0.01
