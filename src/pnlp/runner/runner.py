@@ -62,8 +62,9 @@ class ScheduledOptim():
 class Model_Runner:
 
     def __init__(self,
-                 save: bool,        # If model will be saved.
+                 save: bool,                  # If model will be saved.
                  vocab_size: int,
+                 
                  embedding_dim:int,           # BERT parameters
                  dropout: float,
                  max_len: int,
@@ -139,33 +140,34 @@ class Model_Runner:
 
         if hasattr(self, 'save_as'):        # TODO: check write access
             run_result_csv = ''.join([self.save_as, '_results.csv'])
-            fh = open(run_result_csv, 'w')
-            fh.write('epoch, train_loss, train_accuracy, test_loss, test_accuracy\n')
-            WRITE = True
 
-        for epoch in range(1, num_epochs + 1):
-            start_time = time.time()
-            train_loss, train_accuracy = self.epoch_iteration(epoch, max_batch, train_data, train=True)
-            test_loss, test_accuracy = self.epoch_iteration(epoch, max_batch, test_data, train=False)
+            with open(run_result_csv, 'w') as fh:
+                WRITE = True
+                fh.write('epoch, train_loss, train_accuracy, test_loss, test_accuracy\n')
+                fh.flush() # flush the buffer so lines get written to file
 
-            if epoch < 11 or epoch % 10 == 0:
-                msg = f'Epoch {epoch}, train loss: {train_loss:.2f}, train accuracy: {train_accuracy:.2f}, test loss: {test_loss:.2f}, test accuracy: {test_accuracy:.2f}'
-                print(msg)
-                if WRITE:
-                    fh.write(f'{epoch}, {train_loss:.2f}, {train_accuracy:.2f}, {test_loss:.2f}, {test_accuracy:.2f}\n')
+                for epoch in range(1, num_epochs + 1):
+                    start_time = time.time()
+                    train_loss, train_accuracy = self.epoch_iteration(epoch, max_batch, train_data, train=True)
+                    test_loss, test_accuracy = self.epoch_iteration(epoch, max_batch, test_data, train=False)
 
-            if epoch % 2 == 0:
-                if hasattr(self, 'save_as'):
-                    self.save_model()
+                    if epoch < 11 or epoch % 10 == 0:
+                        if WRITE:
+                            fh.write(f'{epoch}, {train_loss:.2f}, {train_accuracy:.2f}, {test_loss:.2f}, {test_accuracy:.2f}\n')
+                            fh.flush()
 
-            total_epoch_time = time.time() - start_time
+                    if epoch % 2 == 0:
+                        if hasattr(self, 'save_as'):
+                            self.save_model()
 
-            logger.info(f'{msg}, time: {total_epoch_time}')
+                    total_epoch_time = time.time() - start_time
+                    msg = f'Epoch {epoch} | train loss: {train_loss:.2f}, train accuracy: {train_accuracy:.2f}, test loss: {test_loss:.2f}, test accuracy: {test_accuracy:.2f}'
+                    print(f'{msg}, time: {total_epoch_time}')
+                    logger.info(f'{msg}, time: {total_epoch_time}')
 
         if WRITE:
-            fh.close()
             plot_run.plot_run(run_result_csv, save=True)
-            print(f'\nRun result saved to {os.path.basename(run_result_csv)}\n')
+            logger.info(f'Run result saved to {os.path.basename(run_result_csv)}')
 
     def epoch_iteration(self, num_epochs: int, max_batch: int, data_loader, train: bool=True):
         """
@@ -211,7 +213,6 @@ class Model_Runner:
                 loss = self.criterion(predictions.transpose(1, 2), labels)
                 self.model.train()   # set the model back to training mode
 
-
             total_epoch_loss += loss.item()
 
             predicted_tokens  = torch.max(predictions, dim=-1)[1]
@@ -223,7 +224,6 @@ class Model_Runner:
 
         accuracy = correct_predictions / total_masked
         return total_epoch_loss, accuracy
-
 
     def save_model(self):
         if self.save_as:
@@ -268,7 +268,6 @@ class Model_Runner:
             msg = f'Map saved status from {saved_hyperparameters["device"]} to {self.device}.'
             logger.warning(msg)
 
-
         assert self.vocab_size == saved_hyperparameters['vocab_size']
         assert self.embedding_dim == saved_hyperparameters['embedding_dim']
         assert self.dropout == saved_hyperparameters['dropout']
@@ -286,22 +285,10 @@ class Model_Runner:
         random.setstate(saved_state['random_state'])
         torch.set_rng_state(saved_state['rng_state'])  # restore random number state.
 
-
-
 if __name__=="__main__":
-    # Data loader
-    db_file = path.abspath(path.dirname(__file__))
-    db_file = path.join(db_file, '../../../data/SARS_CoV_2_spike_noX_RBD.db')
-    train_dataset = SeqDataset(db_file, "train")
-    test_dataset = SeqDataset(db_file, "test")
-
-    logger.info(f'Sequence db file: {os.path.basename(db_file)}')
-    logger.info(f'Total seqs in training set: {len(train_dataset)}')
 
     now = datetime.datetime.now()
     date_hour_minute = now.strftime("%Y-%m-%d_%H-%M")
-
-
     log_file = os.path.join(os.path.dirname(__file__),
                                      '../../../results')
     log_file = os.path.join(log_file, f'{date_hour_minute}.log')
@@ -313,6 +300,12 @@ if __name__=="__main__":
         datefmt = '%m/%d/%Y %I:%M:%S %p')
     logger.setLevel(logging.DEBUG)  # To disable the matplotlib font_manager logs.
 
+    # Data loader
+    db_file = path.abspath(path.dirname(__file__))
+    db_file = path.join(db_file, '../../../data/SARS_CoV_2_spike_noX_RBD.db')
+    train_dataset = SeqDataset(db_file, "train")
+    test_dataset = SeqDataset(db_file, "test")
+
     embedding_dim = 768
     dropout=0.1
     max_len = 280
@@ -321,7 +314,7 @@ if __name__=="__main__":
     attn_heads = 12
     hidden = embedding_dim
 
-    batch_size = 50
+    batch_size = 64
     n_test_baches = -1
     num_epochs = 100
 
@@ -351,6 +344,8 @@ if __name__=="__main__":
 
     logger.info(f'Using device: {device}')
     logger.info(f'Data set: {os.path.basename(db_file)}')
+    logger.info(f'Total seqs in training set: {len(train_dataset)}')
+    logger.info(f'Total seqs in testing set: {len(test_dataset)}')
     logger.info(f'num_epochs: {num_epochs}')
     logger.info(f'n_test_baches: {n_test_baches}')
     logger.info(f'batch_size: {batch_size}')
