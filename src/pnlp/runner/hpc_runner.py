@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-"""Model Runner"""
+"""Model Runner for running on HPC. SLURM job IDs are used as identifier for runs, unlike date & time for non HPC runs."""
 
 import os
 import sys
@@ -65,6 +65,7 @@ class Model_Runner:
     def __init__(self,
                  save: bool,                  # If model will be saved.
                  load: bool,
+                 job_id: str,
                  
                  vocab_size:int,
                  embedding_dim:int,           # BERT parameters
@@ -85,8 +86,8 @@ class Model_Runner:
             # Create the file name
             now = datetime.datetime.now()
             date_hour_minute = now.strftime("%Y-%m-%d_%H-%M")
-            save_path = os.path.join(os.path.dirname(__file__), f'../../../results/{date_hour_minute}')
-            self.save_as = os.path.join(save_path, date_hour_minute)
+            save_path = os.path.join(os.path.dirname(__file__), '../../../results')
+            self.save_as = os.path.join(save_path, job_id, date_hour_minute)
 
         self.device = device
         self.vocab_size = vocab_size
@@ -367,12 +368,10 @@ class Model_Runner:
 
 if __name__=="__main__":
 
+    job_id = os.environ.get('SLURM_JOB_ID')
     now = datetime.datetime.now()
     date_hour_minute = now.strftime("%Y-%m-%d_%H-%M")
-    directory = f'../../../results/{date_hour_minute}'
-    if not os.path.exists(directory):
-        os.makedirs(directory)
-    log_file = os.path.join(os.path.dirname(__file__), directory)
+    log_file = os.path.join(os.path.dirname(__file__), f'../../../results/{job_id}')
     log_file = os.path.join(log_file, f'{date_hour_minute}.log')
 
     # Add logging configuration
@@ -413,7 +412,7 @@ if __name__=="__main__":
     SAVE_MODEL = True
     USE_GPU = True
     LOAD_MODEL_CHECKPOINT = True
-    model_checkpoint_pth='/projects/bgmp/kaetlyng/Spike_NLP/results/26617636/2023-07-25_110-25_model_weights.pth'
+    model_checkpoint_pth="Spike_NLP/results/2023-07-25_10-25/2023-07-25_10-25_model_weights.pth"
 
     device = torch.device("cuda:0" if torch.cuda.is_available() and USE_GPU else "cpu")
 
@@ -421,13 +420,14 @@ if __name__=="__main__":
     train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, drop_last=True)
     test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=True, drop_last=True)
 
-    runner = Model_Runner(SAVE_MODEL, LOAD_MODEL_CHECKPOINT,
+    runner = Model_Runner(SAVE_MODEL, LOAD_MODEL_CHECKPOINT, job_id=job_id,
                           vocab_size=vocab_size, embedding_dim=embedding_dim, dropout=dropout, 
                           max_len=max_len, mask_prob=mask_prob, n_transformer_layers=n_transformer_layers,
                           n_attn_heads=attn_heads, batch_size=batch_size, lr=lr, betas=betas,
                           weight_decay=weight_decay, warmup_steps=warmup_steps, device=device)
 
-    logger.info(f'Run results located in this directory: {directory}')
+    logger.info(f'slurm_job_id: {job_id}')
+    logger.info(f'Run results located in this directory: ../../../results/{job_id}')
     logger.info(f'Using device: {device}')
     logger.info(f'Data set: {os.path.basename(db_file)}')
     logger.info(f'Total seqs in training set: {len(train_dataset)}')
