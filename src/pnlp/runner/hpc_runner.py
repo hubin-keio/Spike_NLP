@@ -397,8 +397,8 @@ if __name__=="__main__":
     hidden = embedding_dim
 
     batch_size = 64
-    n_test_baches = 5
-    num_epochs = 20
+    n_test_baches = -1
+    num_epochs = 100
 
     lr = 0.0001
     weight_decay = 0.01
