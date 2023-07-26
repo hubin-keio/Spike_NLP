@@ -455,7 +455,7 @@ if __name__=="__main__":
         runner.model.train()
         print(f"Resuming training from saved model checkpoint at Epoch {runner.epochs_ran}")
         logger.info(f"Resuming training from saved model checkpoint at Epoch {runner.epochs_ran}")
-    elif not os.path.exists(model_checkpoint_pth):
+    elif LOAD_MODEL_CHECKPOINT and not os.path.exists(model_checkpoint_pth):
         logger.warning(f"The .pth file {model_checkpoint_pth} does not exist; there is no model to load. Ending program.")
         exit()
 

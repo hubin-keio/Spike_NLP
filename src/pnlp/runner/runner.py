@@ -412,8 +412,8 @@ if __name__=="__main__":
 
     SAVE_MODEL = True
     USE_GPU = True
-    LOAD_MODEL_CHECKPOINT = True
-    model_checkpoint_pth='/projects/bgmp/kaetlyng/Spike_NLP/results/26617636/2023-07-25_110-25_model_weights.pth'
+    LOAD_MODEL_CHECKPOINT = False
+    model_checkpoint_pth=''
 
     device = torch.device("cuda:0" if torch.cuda.is_available() and USE_GPU else "cpu")
 
@@ -455,7 +455,7 @@ if __name__=="__main__":
         runner.model.train()
         print(f"Resuming training from saved model checkpoint at Epoch {runner.epochs_ran}")
         logger.info(f"Resuming training from saved model checkpoint at Epoch {runner.epochs_ran}")
-    elif not os.path.exists(model_checkpoint_pth):
+    elif LOAD_MODEL_CHECKPOINT and not os.path.exists(model_checkpoint_pth):
         logger.warning(f"The .pth file {model_checkpoint_pth} does not exist; there is no model to load. Ending program.")
         exit()
 
