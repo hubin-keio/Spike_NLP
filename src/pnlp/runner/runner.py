@@ -399,7 +399,7 @@ if __name__=="__main__":
 
     batch_size = 64
     n_test_baches = -1
-    num_epochs = 100
+    num_epochs = 50
 
     lr = 0.0001
     weight_decay = 0.01
