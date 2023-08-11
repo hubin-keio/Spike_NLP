@@ -8,8 +8,9 @@ Usage:
     > --standalone: utilize single node
     > --nproc_per_node: number of processes/gpus
 
-    Example command to run (single node, 2 gpu):
+    Example equivalent commands to run (single node, 2 gpu; top is for bio-lambda cluster, bottom is generic):
         /data/miniconda3/envs/spike_env/bin/time -v torchrun --standalone --nproc_per_node=2 gpu_ddp_runner.py
+        /usr/bin/time -v torchrun --standalone --nproc_per_node=2 gpu_ddp_runner.py
 """
 
 import os
@@ -26,12 +27,13 @@ import tqdm
 import torch
 from torch.utils.data import DataLoader
 import torch.nn as nn
+from collections import defaultdict
 from pnlp.db.dataset import SeqDataset, initialize_db
 from pnlp.embedding.tokenizer import ProteinTokenizer, token_to_index, index_to_token
 from pnlp.embedding.nlp_embedding import NLPEmbedding
 from pnlp.model.language import ProteinLM
 from pnlp.model.bert import BERT
-from pnlp.plots import plot_run
+from pnlp.plots import plot_run, plot_accuracy_stats
 import torch.distributed as dist
 from torch.utils.data.distributed import DistributedSampler
 from torch.nn.parallel import DistributedDataParallel as DDP
@@ -78,7 +80,8 @@ class Model_Runner():
 
     def __init__(self,
                  save: bool,                  # If model will be saved.
-                 load: bool,                  # If loading in previous model
+                 load_checkpoint: bool,       # If loading in previous model/checkpoint
+                 load_best: bool,
                  device: int,                 # Device is a gpu, specifically its rank designation
 
                  vocab_size: int,
@@ -103,8 +106,6 @@ class Model_Runner():
             save_path = os.path.join(os.path.dirname(__file__), f'../../../results/{ddp_date_hour_minute}')
             self.save_as = os.path.join(save_path, ddp_date_hour_minute)
         
-        self.world_size = int(dist.get_world_size())
-
         self.device = device
         self.vocab_size = vocab_size
         self.embedding_dim = embedding_dim
@@ -120,13 +121,12 @@ class Model_Runner():
         self.warmup_steps = warmup_steps
 
         # For saving/loading
-        self.load = load
+        self.load_checkpoint = load_checkpoint
         self.epochs_ran = 1 
         self.best_acc = 0
         self.best_loss = float('inf')
 
-        self.save_best_acc = ''.join([self.save_as, '_best_acc'])
-        self.save_best_loss = ''.join([self.save_as, '_best_loss'])
+        self.save_best = ''.join([self.save_as, '_best'])
         self.model_pth = ''
 
         # Initialize model
@@ -139,12 +139,14 @@ class Model_Runner():
         self.model = DDP(self.model,
                          device_ids=[device],
                          find_unused_parameters=True)
+        self.world_size = int(dist.get_world_size())
         
         # Set optimizer, scheduler, and criterion
         self.optim = torch.optim.Adam(self.model.parameters(),
                                       lr = lr,
                                       betas = betas,
                                       weight_decay = weight_decay)
+
         self.optim_schedule = ScheduledOptim(self.optim, embedding_dim, warmup_steps)
         self.criterion = torch.nn.CrossEntropyLoss(reduction='sum')  # sum of CEL at batch level.
 
@@ -171,14 +173,15 @@ class Model_Runner():
 
         if hasattr(self, 'save_as'):        # TODO: check write access
             self.run_result_csv = ''.join([self.save_as, '_results.csv'])
+            self.run_incorrect_preds_csv = ''.join([self.save_as, '_incorrect_predictions.csv'])
+            self.incorrect_aa_preds_tracker = {}
 
             with open(self.run_result_csv,'w') as fh:
                 WRITE = True
                 
-                if not self.load:
+                if not self.load_checkpoint:
                     fh.write('epoch, train_loss, train_accuracy, test_loss, test_accuracy\n')
-                    fh.flush() # flush the buffer so lines get written to file
-
+                    fh.flush() # flush line buffer
                 else:
                     # Load the saved data into new .csv from the loaded model 
                     loaded_csv = "".join(["_".join(self.model_pth.split("_")[:-2]), '_results.csv'])
@@ -187,7 +190,6 @@ class Model_Runner():
                             for line in fc:
                                 fh.write(line)
                                 fh.flush()  
-
                     else:
                         logger.warning(f"The _results.csv file '{loaded_csv}' does not exist. Ending program.")
                         exit()
@@ -195,6 +197,9 @@ class Model_Runner():
                 for epoch in range(self.epochs_ran, num_epochs + 1):
                     if self.device == 0: logger.info(f"Epoch {epoch}")
                     start_time = time.time()
+
+                    # The defaultdict(int) assigns a default value of 0 for a key that does not yet exist
+                    self.incorrect_aa_pred_counter = defaultdict(int)
 
                     # Make sure every epoch the data distributed to processes differently
                     train_sampler.set_epoch(epoch)
@@ -222,30 +227,39 @@ class Model_Runner():
                     test_loss_avg = sum(test_losses) / self.world_size
                     test_accuracy_avg = sum(test_accuracies) / self.world_size
 
+                    # Prediction tracking across processes
+                    incorrect_preds = [None for _ in range(self.world_size)] 
+                    dist.all_gather_object(incorrect_preds, self.incorrect_aa_pred_counter)
+                    
                     if self.device == 0:
-                        if epoch < 11 or epoch % 10 == 0:
-                            fh.write(f'{epoch}, {train_loss_avg:.2f}, {train_accuracy_avg:.2f}, {test_loss_avg:.2f}, {test_accuracy_avg:.2f}\n')
-                            fh.flush()
+                        # Add values to tracker dict from across processes counter dicts
+                        for dictionary in incorrect_preds:
+                            for key, value in dictionary.items():
+                                if key not in self.incorrect_aa_preds_tracker:
+                                    self.incorrect_aa_preds_tracker[key] = defaultdict(int)
+                                self.incorrect_aa_preds_tracker[key][epoch] += value
+ 
+                        fh.write(f'{epoch}, {train_loss_avg:.2f}, {train_accuracy_avg:.2f}, {test_loss_avg:.2f}, {test_accuracy_avg:.2f}\n')
+                        fh.flush()
 
                         if hasattr(self, 'save_as'):
                             self.save_model(epoch, self.save_as)
                             logger.info(f"\tModel saved at {''.join([self.save_as, '_model_weights.pth'])}")
 
-                            test_accuracy_avg = round(test_accuracy_avg, 2)
-                            test_loss_avg = round(test_loss_avg, 2)
+                            test_acc = float(f"{test_accuracy:.2f}")
+                            test_loss = float(f"{test_loss:.2f}")
 
-                            if test_accuracy_avg > self.best_acc:
-                                self.best_acc = test_accuracy_avg
-                                self.save_model(epoch, self.save_best_acc)
-                                logger.info(f"\tNEW BEST ACCURACY: {self.best_acc}; model saved. ACC: {test_accuracy_avg}, LOSS: {test_loss_avg}")
+                            # SAVE BEST MODEL
+                            if test_acc > self.best_acc or (test_acc == self.best_acc and test_loss < self.best_loss):
+                                self.best_acc = test_acc
+                                self.best_loss = test_loss  # Update self.best_loss when better accuracy is found
+                                self.save_model(epoch, self.save_best)
+                                logger.info(f"\tNEW BEST MODEL; model saved. ACC: {test_acc}, LOSS: {test_loss}")
 
-                            if test_loss_avg < self.best_loss:
-                                self.best_loss = test_loss_avg
-                                self.save_model(epoch, self.save_best_loss)
-                                logger.info(f"\tNEW BEST LOSS: {self.best_loss}; model saved. ACC: {test_accuracy_avg}, LOSS: {test_loss_avg}")
-                        
                         total_epoch_time = time.time() - start_time
-                        msg = f'train loss: {train_loss_avg:.2f}, train accuracy: {train_accuracy_avg:.2f}, test loss: {test_loss_avg:.2f}, test accuracy: {test_accuracy_avg:.2f}, time: {total_epoch_time}'
+                        formatted_hms = time.strftime("%H:%M:%S", time.gmtime(total_epoch_time))
+                        decimal_sec = str(total_epoch_time).split('.')[1][:2]
+                        msg = f'train loss: {train_loss:.2f}, train accuracy: {train_accuracy:.2f}, test loss: {test_loss:.2f}, test accuracy: {test_accuracy:.2f}, time: {formatted_hms}.{decimal_sec}'
                         print(f'Epoch {epoch} | {msg}')
                         logger.info(f'\t{msg}')
 
@@ -253,8 +267,24 @@ class Model_Runner():
                     dist.barrier()
 
         if WRITE:
-            plot_run.plot_run(self.run_result_csv, save=True)
-            logger.info(f'Run result saved to {os.path.basename(self.run_result_csv)}')
+            if self.device==0: 
+                plot_run.plot_run(self.run_result_csv, save=True)
+                logger.info(f'Run result saved to {os.path.basename(self.run_result_csv)}')
+
+                # Write to csv, plot
+                with open(self.run_incorrect_preds_csv, 'w') as fg:
+                    header = ", ".join(f"epoch {epoch}" for epoch in range(1, num_epochs + 1))
+                    header = f"expected_aa->predicted_aa, {header}\n"
+                    fg.write(header)
+
+                    for key in self.incorrect_aa_preds_tracker:
+                        self.incorrect_aa_preds_tracker[key] = [self.incorrect_aa_preds_tracker[key].get(epoch, 0) for epoch in range(1, num_epochs + 1)]
+                        data_row = ", ".join(str(val) for val in self.incorrect_aa_preds_tracker[key])
+                        fg.write(f"{key}, {data_row}\n")
+
+                plot_accuracy_stats.plot_top_predictions(self.incorrect_aa_preds_tracker, self.run_incorrect_preds_csv, save=True)
+                plot_accuracy_stats.plot_pred_hist(self.incorrect_aa_preds_tracker, self.run_incorrect_preds_csv, save=True)
+                logger.info(f'Incorrect predictions csv saved to {os.path.basename(self.run_incorrect_preds_csv)}')
 
     def epoch_iteration(self, num_epochs: int, max_batch: int, data_loader, train: bool=True):
         """
@@ -301,13 +331,20 @@ class Model_Runner():
                 self.model.train()   # set the model back to training mode
 
             total_epoch_loss += loss.item()
-
             predicted_tokens  = torch.max(predictions, dim=-1)[1]
             masked_locations = torch.nonzero(torch.eq(tokenized_seqs, MASK_TOKEN_IDX), as_tuple=True)
             correct_predictions += torch.eq(predicted_tokens[masked_locations],
                                             labels[masked_locations]).sum().item()
-
             total_masked += masked_locations[0].numel()
+
+            # STATS
+            if mode == "test":
+                ALL_AAS = 'ACDEFGHIKLMNPQRSTUVWXY'
+                token_to_aa = {i:aa for i, aa in enumerate(ALL_AAS)}
+                # Create a list of keys from masked_loactions in format "expected_aa -> predicted_aa" where expected_aa != predicted_aa
+                aa_keys = [f"{token_to_aa.get(token.item())}->{token_to_aa.get(pred_token.item())}" for token, pred_token in zip(labels[masked_locations], predicted_tokens[masked_locations]) if token!=pred_token]
+                # Update the tracker as going through keys (counting occurences)
+                self.incorrect_aa_pred_counter.update((aa_key, self.incorrect_aa_pred_counter[aa_key] + 1) for aa_key in aa_keys)                
 
         accuracy = correct_predictions / total_masked
         return total_epoch_loss, accuracy
@@ -438,7 +475,7 @@ def main():
     if not os.path.exists(directory):
         os.makedirs(directory)
     log_file = os.path.join(os.path.dirname(__file__), directory)
-    log_file = os.path.join(log_file, f'{date_hour_minute}.log')
+    log_file = os.path.join(log_file, f'ddp-{date_hour_minute}.log')
 
     # Add logging configuration
     logging.basicConfig(
@@ -473,11 +510,11 @@ def main():
 
     batch_size = 64
     n_test_baches = -1
-    num_epochs = 10
+    num_epochs = 50
 
     lr = 0.0001
     weight_decay = 0.01
-    warmup_steps = 10
+    warmup_steps = 435
     betas=(0.9, 0.999)
 
     tokenizer = ProteinTokenizer(max_len, mask_prob)
@@ -487,7 +524,9 @@ def main():
     SAVE_MODEL = True
     USE_GPU = True
     LOAD_MODEL_CHECKPOINT = False
-    model_checkpoint_pth=""
+    LOAD_BEST_MODEL = False
+    model_checkpoint_pth=''
+    best_model_pth=''
 
     # Distributed Samplers
     train_sampler = DistributedSampler(train_dataset)
@@ -499,7 +538,7 @@ def main():
     test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False, drop_last=True, sampler=test_sampler)
 
     # Initialize model runner
-    runner = Model_Runner(SAVE_MODEL, LOAD_MODEL_CHECKPOINT, 
+    runner = Model_Runner(SAVE_MODEL, LOAD_MODEL_CHECKPOINT, LOAD_BEST_MODEL, 
                           vocab_size=vocab_size, embedding_dim=embedding_dim, dropout=dropout, 
                           max_len=max_len, mask_prob=mask_prob, n_transformer_layers=n_transformer_layers,
                           n_attn_heads=attn_heads, batch_size=batch_size, lr=lr, betas=betas,
@@ -541,6 +580,16 @@ def main():
         if device == 0: logger.info(f"Resuming training from saved model checkpoint at Epoch {runner.epochs_ran}")
     elif LOAD_MODEL_CHECKPOINT and not os.path.exists(model_checkpoint_pth):
         if device == 0: logger.warning(f"The .pth file {model_checkpoint_pth} does not exist; there is no model to load. Ending program.")
+        exit()
+
+    if LOAD_BEST_MODEL and os.path.exists(best_model_pth):
+        if device == 0: logger.info(f'Loading best model: {best_model_pth}')
+        if device == 0: runner.model_pth = best_model_pth
+        runner.load_model_parameters(runner.model_pth)
+        if device == 0: print(f"Loading parameters from best saved model.")
+        if device == 0: logger.info(f"Loading parameters from best saved model.")
+    elif LOAD_BEST_MODEL and not os.path.exists(best_model_pth):
+        if device == 0: logger.warning(f"The .pth file {best_model_pth} does not exist; there is no model to load. Ending program.")
         exit()
 
     runner.run(train_sampler=train_sampler, test_sampler=test_sampler,

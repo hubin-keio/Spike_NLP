@@ -6,13 +6,15 @@ import torch
 
 from pnlp.embedding.tokenizer import index_to_token
 
-def extract_ebmedding(pth: str) -> None:
+def extract_embedding(pth: str) -> None:
     '''
     Extract embeeding from x.pth and write it to x_embeddings.csv.
 
-    x.pth is a odel state dictionary saved by torch.save().
+    x.pth is a model state dictionary saved by torch.save().
     '''
-    state_dict = torch.load(pth)
+    saved_state = torch.load(pth)
+    state_dict = saved_state['model_state_dict']
+
     embedding_key = 'bert.embedding.token_embedding.weight'
     assert embedding_key in state_dict.keys()
 
