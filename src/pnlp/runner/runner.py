@@ -16,7 +16,7 @@ import torch
 from torch.utils.data import DataLoader
 import torch.nn as nn
 import logging
-from collections import defaultdict, Counter
+from collections import defaultdict
 from pnlp.db.dataset import SeqDataset, initialize_db
 from pnlp.embedding.tokenizer import ProteinTokenizer, token_to_index, index_to_token
 from pnlp.embedding.nlp_embedding import NLPEmbedding
@@ -428,12 +428,12 @@ if __name__=="__main__":
     hidden = embedding_dim
 
     batch_size = 64
-    n_test_baches = 20
-    num_epochs = 10
+    n_test_baches = -1
+    num_epochs = 25
 
-    lr = 0.005
+    lr = 0.00005
     weight_decay = 0.01
-    warmup_steps = 435
+    warmup_steps = 870 # (training set size / batch size) * 0.1
     betas=(0.9, 0.999)
 
     tokenizer = ProteinTokenizer(max_len, mask_prob)

@@ -510,9 +510,9 @@ def main():
 
     batch_size = 64
     n_test_baches = -1
-    num_epochs = 50
+    num_epochs = 100
 
-    lr = 0.0001
+    lr = 0.00001
     weight_decay = 0.01
     warmup_steps = 435
     betas=(0.9, 0.999)
