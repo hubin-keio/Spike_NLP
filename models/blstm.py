@@ -185,7 +185,7 @@ def count_parameters(model):
 if __name__=='__main__':
 
     DATA_DIR = os.path.join(os.path.join(os.path.dirname(__file__), '../../../data'))
-    RESULTS_DIR = os.path.join(os.path.join(os.path.dirname(__file__), '../../../results'))
+    RESULTS_DIR = os.path.join(os.path.join(os.path.dirname(__file__), '../../../results/blstm'))
 
     now = datetime.datetime.now()
     date_hour_minute = now.strftime("%Y-%m-%d_%H-%M")
