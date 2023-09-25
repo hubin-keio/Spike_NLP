@@ -61,7 +61,7 @@ class DMS_Dataset(Dataset):
             label = self.labels[idx]
             seq = self._label_to_seq(label)
             features = self.embed(seq)
-            return label, features, self.log10_ka[idx]
+            return label, self.log10_ka[idx], seq, features
         
         except IndexError:
             print(f'List index out of range: {idx}, length: {len(self.labels)}.',
@@ -95,12 +95,13 @@ class DMS_Dataset(Dataset):
         mask_prob = 0
         max_len = 280
         tokenizer = ProteinTokenizer(max_len, mask_prob)
-        input_seqs = tokenizer.forward(self.refseq)
+        input_seq = tokenizer.forward(seq)
 
         with torch.no_grad():
-            last_hidden_states = self.model(input_seqs)[0]
+            last_hidden_states = self.model(input_seq)
+            reshaped_hidden_states = last_hidden_states.view(-1, 768)
 
-        return last_hidden_states
+        return reshaped_hidden_states
 
 def load_model(model_pth):
     """ Load in the Spike_NLP model parameters. """
@@ -118,26 +119,68 @@ def load_model(model_pth):
     embedder = NLPEmbedding(embedding_dim, max_len,dropout)
     vocab_size = len(token_to_index)
     bert = BERT(embedding_dim, dropout, max_len, mask_prob, n_transformer_layers, n_attn_heads)
-    model = ProteinLM(bert, vocab_size)
+    model = bert
 
-    # Load pretrained spike model
+    # Load pretrained spike model into bert
     saved_state = torch.load(model_pth, map_location='cuda')
-    state_dict = saved_state['model_state_dict']
 
-    # For loading from ddp models, they have 'module' in keys of state_dict
+    state_dict = saved_state['model_state_dict']
     load_ddp = False
     new_state_dict = OrderedDict()
+
     for k, v in state_dict.items():
-        if k[:6] == 'module':
+        if k[:11] == 'module.bert':
             load_ddp = True
-            new_state_dict[k[7:]] = v   # remove 'module'
+            new_state_dict[k[12:]] = v   # remove 'module.bert.'
         else: break
+        
     if load_ddp: state_dict = new_state_dict
 
     # Load pretrained state_dict
     model.load_state_dict(state_dict)
     return model
 
+def generate_embedding_pth(csv_file:str, dms_dataset:Dataset):
+    """
+    Embed the sequences from the DMS dataset. This will include 4 specific items:
+        - Sequence Identifier (seq_id): the specfic mutations to perform to the reference sequence, identifier
+            - ex: A22C_R127G_E141D_L188V
+        - Log10 Ka (log10_ka): log10 ka value associated with the sequence
+            ex: 8.720000267028809
+        - Sequence (seq): sequence post transformation of the reference sequence to contain the 
+            corresponding  mutation as noted in the sequence label
+            - ex: NITNLCPFGEVFNATRFASVYCWNRKRISNCVADYSVLYNSASFSTFKCYGVSPTKLNDLCFTNVYADSFVIRGDEVRQIAPGQTGKIADYNYKLPDDFTGCVIAWNSNNLDSKVGGNYNYLYRLFGKSNLKPFERDISTDIYQAGSTPCNGVEGFNCYFPLQSYGFQPTNGVGYQPYRVVVLSFELVHAPATVCGPKKST
+        - Embedded Sequence (embedding): sequence embedding ran through the BERT model utilizing the 
+            best pretrained masked protein language model, tensor format.
+            ex: not putting the output, but should be of shape: torch.Size([1, 768])
+    """
+    embedded_file = csv_file.replace('.csv', '_embedded.pth')
+    dataset_iter = iter(dms_dataset)
+    dms_dict = {}
+    counter = 0
+
+    for seq_id, log10_ka, seq, embedding in dataset_iter:
+        entry = {"seq_id": seq_id,
+                 "log10_ka": log10_ka,
+                 "seq": seq,
+                 "embedding": embedding}
+        dms_dict[counter] = entry
+        counter += 1
+        print(f"{counter}: {entry}", flush=True)
+    torch.save(dms_dict, embedded_file)
+
+    # with open(embed_csv, "w") as fh:
+    #     fh.write(f"seq_id, log10_ka, seq, embedding\n")
+    #     for seq_id, log10_ka, seq, embedding in dataset_iter:
+    #         torch.set_printoptions(threshold=200_000)
+    #         counter += 1 
+    #         fh.write(f"{seq_id}, {log10_ka}, {seq}, {embedding}\n")  
+    #         if counter == 2: exit()
+    # print(counter)
+
+
+
+            
 if __name__=="__main__":
 
     DATA_DIR = os.path.join(os.path.join(os.path.dirname(__file__), '../../../data'))
@@ -148,18 +191,19 @@ if __name__=="__main__":
     refseq = 'NITNLCPFGEVFNATRFASVYAWNRKRISNCVADYSVLYNSASFSTFKCYGVSPTKLNDLCFTNVYADSFVIRGDEVRQIAPGQTGKIADYNYKLPDDFTGCVIAWNSNNLDSKVGGNYNYLYRLFRKSNLKPFERDISTEIYQAGSTPCNGVEGFNCYFPLQSYGFQPTNGVGYQPYRVVVLSFELLHAPATVCGPKKST'
 
     # Load pretrained spike model
-    model_pth = os.path.join(RESULTS_DIR, 'ddp-2023-08-14_15-10/ddp-2023-08-14_15-10_best_model_weights.pth')
+    model_pth = os.path.join(RESULTS_DIR, 'ddp-2023-08-16_08-41/ddp-2023-08-16_08-41_best_model_weights.pth')
     model = load_model(model_pth)
 
     # Dataset, training and test dataset set up
     dataset = DMS_Dataset(dms_csv, refseq, model)
-    for idx in range(5):
-        label, features, log10_ka = dataset[idx]
-        print("Label:", label)
-        print("Features shape:", features.shape)
-        print("Log10 Ka:", log10_ka)
-        print()
+    embedded_dataset_csv = generate_embedding_pth(dms_csv, dataset)
 
-
-
-
+    # for idx in range(5):
+    #     seq_id, log10_ka, seq, embedding = dataset[idx]
+    #     print("Label:", seq_id)
+    #     print("Seq:", seq)
+    #     print("Seq length:", len(seq))
+    #     print("Features shape:", embedding.shape)
+    #     #print("Features:", embedding)
+    #     print("Log10 Ka:", log10_ka)
+    #     print()
