@@ -1,67 +1,115 @@
 """Plot accuracy stats for model prediction csv file"""
 
 import os
+import csv
+import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
-from matplotlib.figure import Figure
+import seaborn as sns
 
-def plot_top_predictions(pred_dict:dict, csv_name:str, save: bool=True) -> tuple:
+def csv_reader(csv_file: str):
+    """Read in prediction data from csv_file (if using from outside csv_file instead of dict)."""
+    
+    data = {}
+
+    with open(csv_file, 'r') as file:
+        csv_reader = csv.reader(file)
+        next(csv_reader) 
+
+        for row in csv_reader:
+            key = row[0]
+            value = [int(i) for i in row[1:]]
+            data[key] = value
+
+    return data
+
+def plot_aa_perc_pred_stats_heatmap(incorrect_preds:dict, csv_name:str, save:bool=True):
+    """Plots heatmap of expected vs predicted amino acid incorrect prediction counts."""
+    ALL_AAS = 'ACDEFGHIKLMNPQRSTVWY'
+
+    # Create a DataFrame with all possible amino acid combinations
+    all_combinations = [(e_aa, p_aa) for e_aa in ALL_AAS for p_aa in ALL_AAS]
+    all_df = pd.DataFrame(all_combinations, columns=["Expected", "Predicted"])
+
+    # Go through incorrect preds data and create a dataframe
+    data = []
+    for error_type, count in incorrect_preds.items():
+        e_aa, p_aa = error_type.split('->')
+        data.append((e_aa, p_aa, count[0]))
+
+    df = pd.DataFrame(data, columns=["Expected", "Predicted", "Count"])
+    
+    # Merge dataframes so any aa that did not show up are accounted for
+    df = pd.merge(all_df, df, how="left", on=["Expected", "Predicted"])
+    df["Count"].fillna(0, inplace=True)
+
+    # Calculate the total counts for each expected aa
+    total_counts = df.groupby("Expected")["Count"].sum()
+    df["Expected Total"] = df["Expected"].map(total_counts)
+
+    # Calculate error percentage
+    df["Error Percentage"] = (df["Count"] / df["Expected Total"]) * 100
+    df["Error Percentage"].fillna(0, inplace=True)
+
+    # Plotting
+    # Pivot the DataFrame to create a heatmap data structure
+    heatmap_data = df.pivot_table(index="Expected", columns="Predicted", values="Error Percentage")
+
+    # Create the heatmap using seaborn
+    plt.figure(figsize=(16, 8))
+
+    cmap = sns.color_palette("rocket_r", as_cmap=True)
+    sns.heatmap(heatmap_data, 
+                annot=True, fmt=".3f", 
+                linewidth=.5,
+                cmap=cmap, vmin=0, vmax=100,
+                cbar_kws={'drawedges':False, 'label': 'Prediction Rate (%)'})
+
+    plt.title('Amino Acid Prediction Distribution')
+    plt.xlabel('Predicted Amino Acid')
+    plt.ylabel('Expected Amino Acid')
+    plt.yticks(rotation=0)
+    plt.style.use('ggplot')
+    plt.tight_layout()
+    
+    if save:
+        fname = csv_name.replace('.csv', '_aa_perc_pred_stats_heatmap.png')
+        plt.savefig(fname)
+
+def plot_aa_error_history(incorrect_preds:dict, csv_name:str, normalize:bool, save:bool=True):
     """
-    Generate figure object of accuracy stats using model incorrect prediction dictionary.
+    Calculate the incorrect prediction count history across all epochs per amino acid.
+    Returns a dictionary of lists where 'expected aa: [epoch1_ct, epoch2_ct, epoch3_ct, ...]'.
     """
-    fig = plt.figure(figsize=(10, 6))
+    ALL_AAS = 'ACDEFGHIKLMNPQRSTUVWXY'
 
-    # Extract the epoch numbers for x-axis labels
-    epochs = list(range(1, len(pred_dict[next(iter(pred_dict))]) + 1))
+    # Initialize dictionary, get error count length (epochs) from first key
+    e_aa_error_history = {aa: [0] * len(incorrect_preds[next(iter(incorrect_preds))]) for aa in ALL_AAS}
 
-    # Sort each epoch column in descending order and take the top 5 rows
-    for epoch in range(len(epochs)):
-        sorted_data = sorted(pred_dict.items(), key=lambda item: item[1][epoch], reverse=True)
-        top_evp_keys = [item[0] for item in sorted_data[:5]] # change 5 to be top whatever
-        for evp in top_evp_keys:
-            counts = pred_dict[evp]
-            plt.plot(epochs, counts, marker='o', label=evp)
+    for error_type, counts in incorrect_preds.items():
+        e_aa, _ = error_type.split('->')
+        for epoch, count in enumerate(counts):
+            e_aa_error_history[e_aa][epoch] += count
+  
+    df = pd.DataFrame(e_aa_error_history)
 
-    # Plotting things
+    if normalize:
+        #df = df.div(df.sum(axis=1), axis=0)
+        df = ((df - df.min()) / (df.max() - df.min())) * 100
+         
+    # Plot
+    plt.figure(figsize=(10, 8))  # Adjust the figsize for wider plot
+    df.plot(ax=plt.gca())
+
+    plt.title('Error Counts per Epoch for Expected Amino Acids')
     plt.xlabel('Epoch')
-    plt.ylabel('Count')
-    plt.title("Top 5 counts per incorrect 'expected_aa->predicted_aa' across epochs")
-    plt.xticks(epochs)
-    plt.legend(loc='center left', bbox_to_anchor=(1, 0.5))
+    plt.ylabel('Normalized Error Counts' if normalize else 'Error Counts')
+    plt.yticks(rotation=0)
     plt.style.use('ggplot')
     plt.tight_layout()
-    plt.grid(True)
+    plt.legend(title="Expected Amino Acid", loc='upper left', bbox_to_anchor=(1, 1))
 
     if save:
-        fname = csv_name.replace('.csv', '.png')
-        plt.savefig(fname)
-    
-    return fig, csv_name 
-
-def plot_pred_hist(pred_dict:dict, csv_name:str, save: bool=True) -> tuple:
-    """
-    Generate a histogram of the last epoch predictions.
-    """
-    # Get counts > 0 from last epoch, then organize in descending order
-    labels_counts = [(key, pred_dict[key][-1]) for key in pred_dict if pred_dict[key][-1] > 0]
-    labels_counts.sort(key=lambda x: x[1], reverse=True) 
-    labels = [i[0] for i in labels_counts]
-    counts = [i[1] for i in labels_counts]
-    
-    fig = plt.figure(figsize=(12,6))
- 
-    # Plotting histogram things
-    plt.bar(labels, counts, color='skyblue')
-    plt.xlabel('Amino Acid Predictions')
-    plt.ylabel('Counts')
-    plt.title('Histogram of Incorrect Amino Acid Prediction Counts')
-    plt.xticks(rotation=45, ha='right')
-    plt.style.use('ggplot')
-    plt.tight_layout()
-
-    if save:
-        fname = csv_name.replace('.csv', '_last_pred_hist.png')
-        plt.savefig(fname)
-    
-    return fig, csv_name
+        fname = csv_name.replace('.csv', '_aa_nmm_error_history.png') if normalize else csv_name.replace('.csv', '_aa_error_history.png')
+        plt.savefig(fname, bbox_inches='tight') # to avoid cutting off legend
 

@@ -4,4 +4,6 @@
 *.log
 *.png
 *.txt
+*.tsv
+*.model_save
 *~

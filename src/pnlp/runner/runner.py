@@ -16,7 +16,7 @@ import torch
 from torch.utils.data import DataLoader
 import torch.nn as nn
 import logging
-from collections import defaultdict
+from collections import defaultdict, OrderedDict
 from pnlp.db.dataset import SeqDataset, initialize_db
 from pnlp.embedding.tokenizer import ProteinTokenizer, token_to_index, index_to_token
 from pnlp.embedding.nlp_embedding import NLPEmbedding
@@ -65,8 +65,8 @@ class Model_Runner:
 
     def __init__(self,
                  save: bool,                  # If model will be saved.
-                 load_checkpoint: bool,
-                 load_best: bool,
+                 load_model: bool,
+                 checkpoint: bool,
                  
                  vocab_size:int,
                  embedding_dim:int,           # BERT parameters
@@ -87,7 +87,7 @@ class Model_Runner:
             # Create the file name
             now = datetime.datetime.now()
             date_hour_minute = now.strftime("%Y-%m-%d_%H-%M")
-            save_path = os.path.join(os.path.dirname(__file__), f'../../../results/{date_hour_minute}')
+            save_path = os.path.join(os.path.dirname(__file__), f'../../../results/runner/{date_hour_minute}')
             self.save_as = os.path.join(save_path, date_hour_minute)
 
         self.device = device
@@ -105,11 +105,11 @@ class Model_Runner:
         self.warmup_steps = warmup_steps
 
         # For saving/loading
-        self.load_checkpoint = load_checkpoint
+        self.load_model = load_model
+        self.checkpoint = checkpoint
         self.epochs_ran = 1 
         self.best_acc = 0
         self.best_loss = float('inf')
-
         self.save_best = ''.join([self.save_as, '_best'])
         self.model_pth = ''
 
@@ -120,11 +120,7 @@ class Model_Runner:
         self.model.to(self.device)
 
         # Set optimizer, scheduler, and criterion
-        self.optim = torch.optim.Adam(self.model.parameters(),
-                                      lr = lr,
-                                      betas = betas,
-                                      weight_decay = weight_decay)
-
+        self.optim = torch.optim.Adam(self.model.parameters(), lr=lr, betas=betas, weight_decay=weight_decay)
         self.optim_schedule = ScheduledOptim(self.optim, embedding_dim, warmup_steps)
         self.criterion = torch.nn.CrossEntropyLoss(reduction='sum')  # sum of CEL at batch level.
 
@@ -151,23 +147,21 @@ class Model_Runner:
 
         if hasattr(self, 'save_as'):        # TODO: check write access
             self.run_result_csv = ''.join([self.save_as, '_results.csv'])
-            self.run_incorrect_preds_csv = ''.join([self.save_as, '_incorrect_predictions.csv'])
-            self.incorrect_aa_preds_tracker = {}
+            self.run_preds_csv = ''.join([self.save_as, '_predictions.csv'])
+            self.aa_preds_tracker = {}
 
             with open(self.run_result_csv,'w') as fh:
                 WRITE = True
                 
-                if not self.load_checkpoint:
+                if not self.checkpoint:
                     fh.write('epoch, train_loss, train_accuracy, test_loss, test_accuracy\n')
                     fh.flush() # flush line buffer
                 else:
                     # Load the saved data into new .csv from the loaded model 
-                    loaded_csv = "".join(["_".join(self.model_pth.split("_")[:-2]), '_results.csv'])
+                    loaded_csv = ''.join(['_'.join(self.model_pth.split('_')[:-2]), '_results.csv'])
                     if os.path.exists(loaded_csv): 
                         with open(loaded_csv, 'r') as fc:
-                            for line in fc:
-                                fh.write(line)
-                                fh.flush()  
+                            fh.writelines(fc)
                     else:
                         logger.warning(f"The _results.csv file '{loaded_csv}' does not exist. Ending program.")
                         exit()
@@ -177,31 +171,30 @@ class Model_Runner:
                     start_time = time.time()
 
                     # The defaultdict(int) assigns a default value of 0 for a key that does not yet exist
-                    self.incorrect_aa_pred_counter = defaultdict(int)
+                    self.aa_pred_counter = defaultdict(int)
                                         
-                    train_loss, train_accuracy = self.epoch_iteration(epoch, max_batch, train_data, train=True)
-                    test_loss, test_accuracy = self.epoch_iteration(epoch, max_batch, test_data, train=False)
+                    train_loss, train_accuracy = self.epoch_iteration(epoch, max_batch, train_data, mode='train')
+                    test_loss, test_accuracy = self.epoch_iteration(epoch, max_batch, test_data, mode='test')
 
                     fh.write(f'{epoch}, {train_loss:.2f}, {train_accuracy:.2f}, {test_loss:.2f}, {test_accuracy:.2f}\n')
                     fh.flush()
 
-                    for key in self.incorrect_aa_pred_counter:
-                        if key not in self.incorrect_aa_preds_tracker :
-                            self.incorrect_aa_preds_tracker[key] = {}
-                        self.incorrect_aa_preds_tracker[key][epoch] = self.incorrect_aa_pred_counter.get(key)
+                    for key in self.aa_pred_counter:
+                        if key not in self.aa_preds_tracker :
+                            self.aa_preds_tracker[key] = {}
+                        self.aa_preds_tracker[key][epoch] = self.aa_pred_counter.get(key)
 
                     if hasattr(self, 'save_as'):
-                        self.save_model(epoch, self.save_as)
+                        self._save_model(epoch, self.save_as)
                         logger.info(f"\tModel saved at {''.join([self.save_as, '_model_weights.pth'])}")
 
+                        # SAVE BEST MODEL
                         test_acc = float(f"{test_accuracy:.2f}")
                         test_loss = float(f"{test_loss:.2f}")
-
-                        # SAVE BEST MODEL
                         if test_acc > self.best_acc or (test_acc == self.best_acc and test_loss < self.best_loss):
                             self.best_acc = test_acc
                             self.best_loss = test_loss  # Update self.best_loss when better accuracy is found
-                            self.save_model(epoch, self.save_best)
+                            self._save_model(epoch, self.save_best)
                             logger.info(f"\tNEW BEST MODEL; model saved. ACC: {test_acc}, LOSS: {test_loss}")
 
                     total_epoch_time = time.time() - start_time
@@ -214,30 +207,27 @@ class Model_Runner:
         if WRITE:
             plot_run.plot_run(self.run_result_csv, save=True)
             logger.info(f'Run result saved to {os.path.basename(self.run_result_csv)}')
-            
+
             # Write to csv, plot
-            with open(self.run_incorrect_preds_csv, 'w') as fg:
+            with open(self.run_preds_csv, 'w') as fg:
                 header = ", ".join(f"epoch {epoch}" for epoch in range(1, num_epochs + 1))
                 header = f"expected_aa->predicted_aa, {header}\n"
                 fg.write(header)
 
-                for key in self.incorrect_aa_preds_tracker:
-                    self.incorrect_aa_preds_tracker[key] = [self.incorrect_aa_preds_tracker[key].get(epoch, 0) for epoch in range(1, num_epochs + 1)]
-                    data_row = ", ".join(str(val) for val in self.incorrect_aa_preds_tracker[key])
+                for key in self.aa_preds_tracker:
+                    self.aa_preds_tracker[key] = [self.aa_preds_tracker[key].get(epoch, 0) for epoch in range(1, num_epochs + 1)]
+                    data_row = ", ".join(str(val) for val in self.aa_preds_tracker[key])
                     fg.write(f"{key}, {data_row}\n")
 
-            plot_accuracy_stats.plot_top_predictions(self.incorrect_aa_preds_tracker, self.run_incorrect_preds_csv, save=True)
-            plot_accuracy_stats.plot_pred_hist(self.incorrect_aa_preds_tracker, self.run_incorrect_preds_csv, save=True)
-            logger.info(f'Incorrect predictions csv saved to {os.path.basename(self.run_incorrect_preds_csv)}')
+            plot_accuracy_stats.plot_aa_perc_pred_stats_heatmap(self.aa_preds_tracker, self.run_preds_csv, save=True)
+            logger.info(f'Predictions csv saved to {os.path.basename(self.run_preds_csv)}')
 
-    def epoch_iteration(self, num_epochs: int, max_batch: int, data_loader, train: bool=True):
+    def epoch_iteration(self, num_epochs: int, max_batch: int, data_loader, mode:str):
         """
         Loop over dataloader for training or testing
 
         For training mode, backpropogation is activated
         """
-        mode = "train" if train else "test"
-
         MASK_TOKEN_IDX = token_to_index['<MASK>']
 
         # Set the tqdm progress bar
@@ -284,17 +274,18 @@ class Model_Runner:
             # STATS
             if mode == "test":
                 ALL_AAS = 'ACDEFGHIKLMNPQRSTUVWXY'
-                token_to_aa = {i:aa for i, aa in enumerate(ALL_AAS)}
+                token_to_aa = {i:aa for i, aa in enumerate(ALL_AAS)}                
                 # Create a list of keys from masked_loactions in format "expected_aa -> predicted_aa" where expected_aa != predicted_aa
-                aa_keys = [f"{token_to_aa.get(token.item())}->{token_to_aa.get(pred_token.item())}" for token, pred_token in zip(labels[masked_locations], predicted_tokens[masked_locations]) if token!=pred_token]
+                aa_keys = [f"{token_to_aa.get(token.item())}->{token_to_aa.get(pred_token.item())}" for token, pred_token in zip(labels[masked_locations], predicted_tokens[masked_locations])]
                 # Update the tracker as going through keys (counting occurences)
-                self.incorrect_aa_pred_counter.update((aa_key, self.incorrect_aa_pred_counter[aa_key] + 1) for aa_key in aa_keys)                
+                self.aa_pred_counter.update((aa_key, self.aa_pred_counter[aa_key] + 1) for aa_key in aa_keys)                
+
 
         accuracy = correct_predictions / total_masked
         return total_epoch_loss, accuracy
     
 
-    def save_model(self, epoch:int, save_path:str):
+    def _save_model(self, epoch:int, save_path:str):
         if self.save_as:
             file_path = ''.join([save_path, '_model_weights.pth'])
 
@@ -323,48 +314,11 @@ class Model_Runner:
 
             torch.save(state, file_path)
 
-    def load_model_checkpoint(self, pth:str):
+    def _load_model(self, pth:str):
         """
         Load a saved model status dictionary. 
-        This should NOT be the best accuracy or best loss .pth. 
-        This is for checkpointing.
-
-        pth: saved model state dictionary file (.pth file in results directory)
-        """
-        if "best" in pth:
-            logger.warning(f"The .pth file used should not be of a saved best acc/loss model. Ending program.")
-            exit()
-
-        map_location = self.device
-        saved_state = torch.load(pth, map_location=map_location)
-        saved_hyperparameters = saved_state['hyperparameters']
-        if saved_hyperparameters["device"] != self.device:
-            msg = f'Map saved status from {saved_hyperparameters["device"]} to {self.device}.'
-            logger.warning(msg)
-
-        assert self.vocab_size == saved_hyperparameters['vocab_size']
-        assert self.embedding_dim == saved_hyperparameters['embedding_dim']
-        assert self.dropout == saved_hyperparameters['dropout']
-        assert self.max_len == saved_hyperparameters['max_len']
-        assert self.mask_prob == saved_hyperparameters['mask_prob']
-        assert self.n_transformer_layers == saved_hyperparameters['n_transformer_layers']
-        assert self.n_attn_heads == saved_hyperparameters['n_attn_heads']
-        assert self.batch_size == saved_hyperparameters['batch_size']
-        assert self.init_lr == saved_hyperparameters['init_lr']
-        assert self.betas == saved_hyperparameters['betas']
-        assert self.weight_decay == saved_hyperparameters['weight_decay']
-        assert self.warmup_steps == saved_hyperparameters['warmup_steps']
-
-        self.epochs_ran = saved_state['epochs_ran']
-        self.best_acc = saved_state['best_acc']
-        self.best_loss = saved_state['best_loss']
-        self.model.load_state_dict(saved_state['model_state_dict'])
-        self.optim.load_state_dict(saved_state['optim_state_dict'])
-        random.setstate(saved_state['random_state'])
-
-    def load_model_parameters(self, pth:str):
-        """
-        Load a saved model status dictionary.
+        checkpoint as True means loading from ".model_weights.pth"
+        checkpoint as False means loading from ".best_model_weights.pth"
 
         pth: saved model state dictionary file (.pth file in results directory)
 
@@ -374,38 +328,51 @@ class Model_Runner:
         """
         saved_state = torch.load(pth, map_location=self.device)
         saved_hyperparameters = saved_state['hyperparameters']
+        state_dict = saved_state['model_state_dict']
+
         if saved_hyperparameters["device"] != self.device:
             msg = f'Map saved status from {saved_hyperparameters["device"]} to {self.device}.'
             logger.warning(msg)
 
-        assert self.vocab_size == saved_hyperparameters['vocab_size']
-        assert self.embedding_dim == saved_hyperparameters['embedding_dim']
-        assert self.dropout == saved_hyperparameters['dropout']
-        assert self.max_len == saved_hyperparameters['max_len']
-        assert self.mask_prob == saved_hyperparameters['mask_prob']
-        assert self.n_transformer_layers == saved_hyperparameters['n_transformer_layers']
-        assert self.n_attn_heads == saved_hyperparameters['n_attn_heads']
-        assert self.batch_size == saved_hyperparameters['batch_size']
-        assert self.init_lr == saved_hyperparameters['init_lr']
-        assert self.betas == saved_hyperparameters['betas']
-        assert self.weight_decay == saved_hyperparameters['weight_decay']
-        assert self.warmup_steps == saved_hyperparameters['warmup_steps']
-        self.model.load_state_dict(saved_state['model_state_dict'])
+        hyperparameters = ['vocab_size','embedding_dim','dropout','max_len','mask_prob',
+                           'n_transformer_layers','n_attn_heads','batch_size','init_lr',
+                           'betas','weight_decay','warmup_steps']
+
+        for hp in hyperparameters:
+            assert getattr(self, hp) == saved_hyperparameters[hp], f"{hp} mismatch"
+
+        # For loading from ddp models, they have 'module' in keys of state_dict
+        load_ddp = False
+        new_state_dict = OrderedDict()
+        for k, v in state_dict.items():
+            if k[:6] == 'module':
+                load_ddp = True
+                new_state_dict[k[7:]] = v   # remove 'module'
+            else: break
+        if load_ddp: state_dict = new_state_dict
+
+        # Load pretrained state_dict
+        self.model.load_state_dict(state_dict)
         random.setstate(saved_state['random_state'])
         if isinstance(saved_state['rng_state'], torch.ByteTensor):
             torch.set_rng_state(saved_state['rng_state'])  # restore random number state.
+
+        if self.checkpoint:
+            self.epochs_ran = saved_state['epochs_ran']
+            self.best_acc = saved_state['best_acc']
+            self.best_loss = saved_state['best_loss']
+            self.optim.load_state_dict(saved_state['optim_state_dict'])
 
 if __name__=="__main__":
 
     now = datetime.datetime.now()
     date_hour_minute = now.strftime("%Y-%m-%d_%H-%M")
-    directory = f'../../../results/{date_hour_minute}'
-    if not os.path.exists(directory):
-        os.makedirs(directory)
-    log_file = os.path.join(os.path.dirname(__file__), directory)
-    log_file = os.path.join(log_file, f'{date_hour_minute}.log')
+    results_dir = os.path.join(os.path.join(os.path.dirname(__file__), '../../../results/runner'))
+    run_dir = os.path.join(results_dir, f'{date_hour_minute}')
+    os.makedirs(run_dir, exist_ok = True)
 
     # Add logging configuration
+    log_file = os.path.join(run_dir, f'{date_hour_minute}.log')
     logging.basicConfig(
         filename = log_file,
         format = '%(asctime)s - %(levelname)s - %(message)s',
@@ -420,7 +387,7 @@ if __name__=="__main__":
 
     # -= HYPERPARAMETERS =-
     embedding_dim = 768
-    dropout=0.1
+    dropout = 0.1
     max_len = 280
     mask_prob = 0.15
     n_transformer_layers = 12
@@ -428,12 +395,12 @@ if __name__=="__main__":
     hidden = embedding_dim
 
     batch_size = 64
-    n_test_baches = -1
-    num_epochs = 25
+    n_test_baches = 20
+    num_epochs = 105
 
-    lr = 0.00005
+    lr = 1e-05
     weight_decay = 0.01
-    warmup_steps = 870 # (training set size / batch size) * 0.1
+    warmup_steps = 435 # (training set size / batch size) * 0.1
     betas=(0.9, 0.999)
 
     tokenizer = ProteinTokenizer(max_len, mask_prob)
@@ -441,25 +408,24 @@ if __name__=="__main__":
     vocab_size = len(token_to_index)
 
     SAVE_MODEL = True
-    USE_GPU = True
-    LOAD_MODEL_CHECKPOINT = False
-    LOAD_BEST_MODEL = False
-    model_checkpoint_pth=''
-    best_model_pth=''
+    LOAD_MODEL = False
+    CHECKPOINT = False
+    model_pth = ''
 
+    USE_GPU = True
     device = torch.device("cuda:0" if torch.cuda.is_available() and USE_GPU else "cpu")
 
     torch.manual_seed(0)        # Dataloader uses its own random number generator.
-    train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, drop_last=True)
-    test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=True, drop_last=True)
+    train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, drop_last=False)
+    test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=True, drop_last=False)
 
-    runner = Model_Runner(SAVE_MODEL, LOAD_MODEL_CHECKPOINT, LOAD_BEST_MODEL,
+    runner = Model_Runner(SAVE_MODEL, LOAD_MODEL, CHECKPOINT,
                           vocab_size=vocab_size, embedding_dim=embedding_dim, dropout=dropout, 
                           max_len=max_len, mask_prob=mask_prob, n_transformer_layers=n_transformer_layers,
                           n_attn_heads=attn_heads, batch_size=batch_size, lr=lr, betas=betas,
                           weight_decay=weight_decay, warmup_steps=warmup_steps, device=device)
 
-    logger.info(f'Run results located in this directory: {directory}')
+    logger.info(f'Run results located in this directory: {run_dir}')
     logger.info(f'Using device: {device}')
     logger.info(f'Data set: {os.path.basename(db_file)}')
     logger.info(f'Total seqs in training set: {len(train_dataset)}')
@@ -480,25 +446,15 @@ if __name__=="__main__":
     logger.info(f'hidden: {hidden}')
     logger.info(f'Number of parameters: {"{:,.0f}".format(runner.count_parameters_with_gradidents())}')
 
-    if LOAD_MODEL_CHECKPOINT and os.path.exists(model_checkpoint_pth):
-        logger.info(f'Loading model checkpoint: {model_checkpoint_pth}')
-        runner.model_pth = model_checkpoint_pth
-        runner.load_model_checkpoint(runner.model_pth)
+    if LOAD_MODEL and os.path.exists(model_pth):
+        logger.info(f'Loading model: {model_pth}')
+        runner.model_pth = model_pth
+        runner._load_model(runner.model_pth)
         runner.model.train()
-        print(f"Resuming training from saved model checkpoint at Epoch {runner.epochs_ran}")
-        logger.info(f"Resuming training from saved model checkpoint at Epoch {runner.epochs_ran}")
-    elif LOAD_MODEL_CHECKPOINT and not os.path.exists(model_checkpoint_pth):
-        logger.warning(f"The .pth file {model_checkpoint_pth} does not exist; there is no model to load. Ending program.")
-        exit()
-
-    if LOAD_BEST_MODEL and os.path.exists(best_model_pth):
-        logger.info(f'Loading best model: {best_model_pth}')
-        runner.model_pth = best_model_pth
-        runner.load_model_parameters(runner.model_pth)
-        print(f"Loading parameters from best saved model.")
-        logger.info(f"Loading parameters from best saved model.")
-    elif LOAD_BEST_MODEL and not os.path.exists(best_model_pth):
-        logger.warning(f"The .pth file {best_model_pth} does not exist; there is no model to load. Ending program.")
+        print(f"Loading from saved model at Epoch {runner.epochs_ran}")
+        logger.info(f"RLoading from saved model at Epoch {runner.epochs_ran}")
+    elif LOAD_MODEL and not os.path.exists(model_pth):
+        logger.warning(f"The .pth file {model_pth} does not exist; there is no model to load. Ending program.")
         exit()
 
     runner.run(train_data = train_loader, test_data = test_loader,
