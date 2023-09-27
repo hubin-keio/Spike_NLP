@@ -4,12 +4,12 @@
 import os
 import re
 import sys
+import pickle
 import torch
 import numpy as np
 import torch.nn as nn
 from torch.utils.data import Dataset, random_split
 from collections import OrderedDict
-
 from pnlp.db.dataset import SeqDataset, initialize_db
 from pnlp.embedding.tokenizer import ProteinTokenizer, token_to_index, index_to_token
 from pnlp.embedding.nlp_embedding import NLPEmbedding
@@ -102,6 +102,42 @@ class DMS_Dataset(Dataset):
             reshaped_hidden_states = last_hidden_states.view(-1, 768)
 
         return reshaped_hidden_states
+
+
+class PKL_Loader(Dataset):
+    """ Binding Dataset """
+    
+    def __init__(self, pickle_file:str, model:nn.Module):
+        """
+        Load sequence label, binding data, and embeddings from pickle file.
+
+        pickle_file: a pickle file with seq_id, log10_ka, seq, and embedding data.
+        model: pre-trained model for embeddings (assumed to be a PyTorch model)
+        """
+        with open(pickle_file, 'rb') as f:
+            dms_list = pickle.load(f)
+        
+        self.labels = [entry['seq_id'] for entry in dms_list]
+        self.log10_ka = [entry['log10_ka'] for entry in dms_list]
+        self.embeddings = [entry['embedding'] for entry in dms_list]
+
+    def __len__(self) -> int:
+        return len(self.labels)
+
+    def __getitem__(self, idx):
+        try:
+            label = self.labels[idx]
+            features = self.embeddings[idx]
+            targets = self.log10_ka[idx]
+            
+            return label, features, targets
+        
+        except IndexError:
+            print(f'List index out of range: {idx}, length: {len(self.labels)}.',
+                  file=sys.stderr)
+            sys.exit(1)
+
+
 
 def load_model(model_pth):
     """ Load in the Spike_NLP model parameters. """
