@@ -1,9 +1,11 @@
 #!/usr/bin/env python
 
 import os
+import sys
 import tqdm
 import torch
 import datetime
+import numpy as np
 import seaborn as sns
 import pandas as pd
 from collections import defaultdict
@@ -12,9 +14,10 @@ from torch.utils.data import DataLoader, random_split
 from typing import Union
 from matplotlib import pyplot as plt
 from prettytable import PrettyTable
-from torcheval.metrics.functional import r2_score
-from load_dms import DMS_Dataset, load_model
 from pnlp.embedding.tokenizer import ProteinTokenizer, token_to_index, index_to_token
+
+sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
+from data.load_dms import PKL_Loader
 
 class BLSTM(nn.Module):
     """ Bidirectional LSTM """
@@ -72,16 +75,16 @@ def run_lstm(model, train_set, test_set, n_epochs: int, batch_size: int, max_bat
     metrics = defaultdict(list)
 
     for epoch in range(1, n_epochs + 1):
-        train_loss, train_r2 = epoch_iteration(model, loss_fn, optimizer, train_loader, epoch, max_batch, device, mode='train')
-        test_loss, test_r2 = epoch_iteration(model, loss_fn, optimizer, test_loader, epoch, max_batch, device, mode='test')
+        train_loss = epoch_iteration(model, loss_fn, optimizer, train_loader, epoch, max_batch, device, mode='train')
+        test_loss = epoch_iteration(model, loss_fn, optimizer, test_loader, epoch, max_batch, device, mode='test')
 
-        keys = ['train_loss','test_loss','train_r2','test_r2']
+        keys = ['train_loss','test_loss'] # to add more metrics, add more keys
         for key in keys:
             metrics[key].append(locals()[key])
 
         print(f'\n'
-              f'Epoch {epoch} | Train MSE: {train_loss:.4f}, Train R2: {train_r2:.4f}\n'
-              f'{" "*(len(str(epoch))+8)} Test MSE: {test_loss:.4f}, Test R2: {test_r2:.4f}')
+              f'Epoch {epoch} | Train MSE: {train_loss:.4f}\n'
+              f'{" "*(len(str(epoch))+8)} Test MSE: {test_loss:.4f}')
 
         save_model(model, optimizer, epoch, save_as + '.model_save')
 
@@ -92,7 +95,6 @@ def epoch_iteration(model, loss_fn, optimizer, data_loader, num_epochs: int, max
     
     model.train() if mode=='train' else model.eval()
     loss = 0
-    r2 = 0
 
     data_iter = tqdm.tqdm(enumerate(data_loader),
                           desc=f'Epoch_{mode}: {num_epochs}',
@@ -103,7 +105,7 @@ def epoch_iteration(model, loss_fn, optimizer, data_loader, num_epochs: int, max
         if max_batch > 0 and batch >= max_batch:
             break 
         
-        _, target, _, feature = batch_data
+        label, feature, target = batch_data
         feature, target = feature.to(device), target.to(device) 
 
         if mode == 'train':
@@ -120,10 +122,7 @@ def epoch_iteration(model, loss_fn, optimizer, data_loader, num_epochs: int, max
                 batch_loss = loss_fn(pred, target)
                 loss += batch_loss.item()
 
-        # R2 value 
-        r2 = r2_score(pred, target).cpu()
-
-    return loss, r2
+    return loss
 
 def save_model(model: BLSTM, optimizer: torch.optim.SGD, epoch: int, save_as: str):
     """
@@ -145,6 +144,9 @@ def plot_history(metrics: dict, n_train: int, n_test: int, save_as: str):
     history_df = pd.DataFrame(metrics)
     history_df['train_loss'] = history_df['train_loss']/n_train  # average error per item
     history_df['test_loss'] = history_df['test_loss']/n_test
+
+    history_df['train_rmse'] = np.sqrt(history_df['train_loss']) # rmse
+    history_df['test_rmse'] = np.sqrt(history_df['test_loss'])
     
     sns.set_theme()
     sns.set_context('talk')
@@ -156,13 +158,13 @@ def plot_history(metrics: dict, n_train: int, n_test: int, save_as: str):
     sns.scatterplot(data=history_df, x=history_df.index, y='test_loss', label='testing', ax=axes[0])
     axes[0].set(xlabel='Epochs', ylabel='Average MSE per sample')
 
-    sns.scatterplot(data=history_df, x=history_df.index, y='train_r2', label='training', ax=axes[1])
-    sns.scatterplot(data=history_df, x=history_df.index, y='test_r2', label='testing', ax=axes[1])
-    axes[1].set(xlabel='Epochs', ylabel='R-squared')
+    sns.scatterplot(data=history_df, x=history_df.index, y='train_rmse', label='training', ax=axes[1])
+    sns.scatterplot(data=history_df, x=history_df.index, y='test_rmse', label='testing', ax=axes[1])
+    axes[1].set(xlabel='Epochs', ylabel='Average RMSE per sample')
 
     plt.tight_layout()
     fig.savefig(save_as + '.png')
-    history_df.to_csv(save_as + '.csv')
+    history_df.to_csv(save_as + '.csv', index=False)
 
 def count_parameters(model):
     """
@@ -184,33 +186,28 @@ def count_parameters(model):
 
 if __name__=='__main__':
 
-    DATA_DIR = os.path.join(os.path.join(os.path.dirname(__file__), '../../../data'))
-    RESULTS_DIR = os.path.join(os.path.join(os.path.dirname(__file__), '../../../results/blstm'))
+    data_dir = os.path.join(os.path.dirname(__file__), '../data/dms')
+    results_dir = os.path.join(os.path.dirname(__file__), '../results/blstm')
 
     now = datetime.datetime.now()
     date_hour_minute = now.strftime("%Y-%m-%d_%H-%M")
-    DIR = os.path.join(RESULTS_DIR, f"blstm-{date_hour_minute}")
-    os.makedirs(DIR, exist_ok = True)
+    run_dir = os.path.join(results_dir, f"blstm-{date_hour_minute}")
+    os.makedirs(run_dir, exist_ok = True)
 
-    # Data file, reference sequence
-    dms_csv = os.path.join(DATA_DIR, 'mutation_binding_Kds.csv')
-    refseq = 'NITNLCPFGEVFNATRFASVYAWNRKRISNCVADYSVLYNSASFSTFKCYGVSPTKLNDLCFTNVYADSFVIRGDEVRQIAPGQTGKIADYNYKLPDDFTGCVIAWNSNNLDSKVGGNYNYLYRLFRKSNLKPFERDISTEIYQAGSTPCNGVEGFNCYFPLQSYGFQPTNGVGYQPYRVVVLSFELLHAPATVCGPKKST'
+    device = "cuda"
 
-    # Load pretrained spike model
-    model_pth = os.path.join(RESULTS_DIR, 'ddp-2023-08-16_08-41/ddp-2023-08-16_08-41_best_model_weights.pth')
-    model = load_model(model_pth)
-
-    # Dataset, training and test dataset set up
-    dataset = DMS_Dataset(dms_csv, refseq, model)
-    train_size = int(0.8 * len(dataset)) 
-    test_size = len(dataset) - train_size
-    train_set, test_set = random_split(dataset, (train_size, test_size))
+    # Load embedded data pickles
+    embedded_train_pkl = os.path.join(data_dir, "mutation_binding_Kds_train_embedded.pkl")
+    embedded_test_pkl = os.path.join(data_dir, "mutation_binding_Kds_test_embedded.pkl")
+    train_pkl_loader = PKL_Loader(embedded_train_pkl, device)
+    test_pkl_loader = PKL_Loader(embedded_test_pkl, device)
+    train_size = len(train_pkl_loader)
+    test_size = len(test_pkl_loader)
 
     # Run setup
-    device = "cuda"
-    n_epochs = 20 #20
+    n_epochs = 100
     batch_size = 32
-    max_batch = 100
+    max_batch = -1
 
     lstm_input_size = 768       
     lstm_hidden_size = 768     
@@ -218,10 +215,10 @@ if __name__=='__main__':
     lstm_bidrectional = True   
     fcn_hidden_size = 768       
 
-    model = BLSTM(batch_size, lstm_input_size, lstm_hidden_size, lstm_num_layers, lstm_bidrectional, fcn_hidden_size,  device)
+    model = BLSTM(batch_size, lstm_input_size, lstm_hidden_size, lstm_num_layers, lstm_bidrectional, fcn_hidden_size, device)
 
     count_parameters(model)
-    model_result = os.path.join(DIR, f"blstm-{date_hour_minute}_train_{train_size}_test_{test_size}")
-    metrics  = run_lstm(model, train_set, test_set, n_epochs, batch_size, max_batch, device, model_result)
+    model_result = os.path.join(run_dir, f"blstm-{date_hour_minute}_train_{train_size}_test_{test_size}")
+    metrics  = run_lstm(model, train_pkl_loader, test_pkl_loader, n_epochs, batch_size, max_batch, device, model_result)
     plot_history(metrics, train_size, test_size, model_result)
     

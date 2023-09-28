@@ -110,13 +110,12 @@ class DMS_Dataset(Dataset):
 class PKL_Loader(Dataset):
     """ Binding Dataset """
     
-    def __init__(self, pickle_file:str, model:nn.Module, device:str):
+    def __init__(self, pickle_file:str, device:str):
         """
         Load sequence label, binding data, and embeddings from pickle file.
 
         pickle_file: a pickle file with seq_id, log10_ka, seq, and embedding data.
                      NOTE: the embedding tensors are saved as cpu
-        model: pre-trained model for embeddings (assumed to be a PyTorch model)
         device: cuda or cpu
         """
         with open(pickle_file, 'rb') as f:
@@ -240,8 +239,8 @@ if __name__=="__main__":
     embedded_train_pkl = dms_train_csv.replace('.csv', '_embedded.pkl')
     embedded_test_pkl = dms_test_csv.replace('.csv', '_embedded.pkl')
 
-    train_pkl_loader = PKL_Loader(embedded_train_pkl, model, device)
-    test_pkl_loader = PKL_Loader(embedded_test_pkl, model, device)
+    train_pkl_loader = PKL_Loader(embedded_train_pkl, device)
+    test_pkl_loader = PKL_Loader(embedded_test_pkl, device)
 
     print("Loaded training dataset from pickle:")
     for i in range(5):  # adjust the range as needed to print a few examples
