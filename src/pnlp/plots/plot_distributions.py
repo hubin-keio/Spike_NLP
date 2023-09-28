@@ -56,8 +56,8 @@ def add_variants(seq_data:SeqDataset, meta_data_df, save_as:str, mode:str) -> tu
     """
     Mode: train or test
     """
-    variant_file_name = os.path.join(save_as, f'rbd_{mode}_variant_seq.csv') 
-    no_variant_file_name = os.path.join(save_as, f'rbd_{mode}_no_variant_seq.csv') 
+    variant_file_name = os.path.join(save_as, f'spike_variants/rbd_{mode}_variant_seq.csv') 
+    no_variant_file_name = os.path.join(save_as, f'spike_variants/rbd_{mode}_no_variant_seq.csv') 
 
     # Set the tqdm progress bar
     data_iter = tqdm.tqdm(enumerate(seq_data),
@@ -201,7 +201,7 @@ if __name__ == '__main__':
     test_dataset = SeqDataset(db_file, "test")
 
     # Meta data
-    meta_data_file = os.path.join(data_dir, 'spikeprot0528.clean.uniq.noX.RBD.metadata_variants.txt')  
+    meta_data_file = os.path.join(data_dir, 'spike/spikeprot0528.clean.uniq.noX.RBD.metadata_variants.txt')  
 
     # Extract data that includes variants
     meta_data_df, dropped_meta_data_df = extract_variant(meta_data_file)
@@ -214,8 +214,8 @@ if __name__ == '__main__':
     train_seq_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, drop_last=True)
     test_seq_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=True, drop_last=True)
    
-    train_variant_csv, train_no_variant_csv = add_variants(train_seq_loader, meta_data_df, results_dir, "train")
-    test_variant_csv, test_no_variant_csv = add_variants(test_seq_loader, meta_data_df, results_dir, "test")
+    train_variant_csv, train_no_variant_csv = add_variants(train_seq_loader, meta_data_df, data_dir, "train")
+    test_variant_csv, test_no_variant_csv = add_variants(test_seq_loader, meta_data_df, data_dir, "test")
     print(f"Number of seq_ids in training database: (w/ variant label):{calc_num_seq_ids(train_variant_csv)}, (w/o variant label):{calc_num_seq_ids(train_no_variant_csv)} ")
     print(f"Number of seq_ids in testing database: (w/ variant label):{calc_num_seq_ids(test_variant_csv)}, (w/o variant label):{calc_num_seq_ids(test_no_variant_csv)} ")
 

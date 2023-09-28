@@ -32,7 +32,7 @@ def plot_sequence_length_distribution(sequence_lengths):
 if __name__ == '__main__':
     import os
     root_dir = os.path.join(os.path.dirname(__file__), '../../../')
-    fasta_file = 'data/spikeprot0203.clean.uniq.noX.RBD.fasta'
+    fasta_file = 'data/spike/spikeprot0203.clean.uniq.noX.RBD.fasta'
     fasta_file = os.path.join(root_dir, fasta_file)
     sequences = read_fasta_file(fasta_file)
     sequence_lengths = calculate_sequence_lengths(sequences)
