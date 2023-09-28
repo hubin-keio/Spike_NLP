@@ -70,14 +70,12 @@ class BERT_Runner:
         self.model.to(self.device)
 
         # Create the file name
-        tsv_name = csv_name.replace(".csv", "_embedding.tsv")
-        self.save_as = os.path.join(run_dir, tsv_name)
+        self.save_as = csv_name.replace(".csv", "_embedding.pkl")
 
     def load_parameters(self):
         """
         Load parameters from the best pre-training model.
         Note that only parameters up to the BERT model is needed. Those for the language model are not needed.
-
         """
         saved_state = torch.load(self.parameter_file, map_location=self.device)
         saved_hyperparameters = saved_state['hyperparameters']
@@ -105,52 +103,6 @@ class BERT_Runner:
 
         self.model.load_state_dict(state_dict)
         random.setstate(saved_state['random_state'])
-
-    # def run(self, seq_data:Dataset, max_batch: Union[int, None]):
-    #     """
-    #     Call the BERT model to generate hidden states.
-
-    #     Parameters:
-    #     seq_data: a dataloader feeding protein sequences.
-    #     max_batch: maximum number of batches to run. If not defined, all avaiable batches from train_data will be used.
-    #     """
-    #     if not max_batch:
-    #         max_batch = len(seq_data)
-
-    #     logger.info(f"Loading saved pth file: {self.parameter_file}")
-    #     self.load_parameters()
-
-    #     logger.info("Running BERT")
-    #     start_time = time.time()
-    #     self.model.eval()
-
-    #     # Set the tqdm progress bar
-    #     data_iter = tqdm.tqdm(enumerate(seq_data),
-    #                           total = len(seq_data),
-    #                           bar_format='{l_bar}{r_bar}')
-
-    #     with open(self.save_as, "w") as fue:
-    #         fue.write(f"seq_id\tvariant\tembedding\n")
-    #         fue.flush()
-
-    #         for i, batch_data in data_iter:
-    #             if max_batch > 0 and i >= max_batch:
-    #                 break
-
-    #             seq_ids, variants, seqs = batch_data
-    #             tokenized_seqs = self.tokenizer(seqs)
-    #             tokenized_seqs = tokenized_seqs.to(self.device)  # input tokens with masks
-
-    #             with torch.no_grad():
-    #                 hidden_states = self.model(tokenized_seqs)
-    #                 embeddings = hidden_states.cpu().numpy()
-    #                 print(embeddings.shape)
-
-    #                 # Align seq_id with its embedding
-    #                 for seq_id, variant, embedding in zip(seq_ids, variants, embeddings):
-    #                     embedding = embedding.flatten()
-    #                     fue.write(f"{seq_id}\t{variant}\t{embedding.tolist()}\n")
-    #                     fue.flush()
 
     def run(self, seq_data:Dataset, max_batch: Union[int, None]):
         """
@@ -196,24 +148,21 @@ class BERT_Runner:
                 all_seq_ids.extend(seq_ids)
                 all_variants.extend(variants)
 
-        # Stack all embeddings into a single numpy array
-        all_embeddings = np.vstack(all_embeddings)
-
         # Save data to a pickle file
-        self.save_as = self.save_as.replace(".tsv", ".pkl")
         with open(self.save_as, 'wb') as f:
             pickle.dump((all_seq_ids, all_variants, all_embeddings), f)
 
 class VariantSeqDataset(Dataset):
 
+    # For split dataset
+    # def __init__(self, csv_file:str):
+    #     self.df = pd.read_csv(csv_file, sep=',', header=0)
+    
     # For full dataset
-    # def __init__(self, training_csv_file:str, testing_csv_file:str):
-    #     self.training_df = pd.read_csv(training_csv_file, sep=',', header=0)
-    #     self.testing_df = pd.read_csv(testing_csv_file, sep=',', header=0)
-    #     self.df = pd.concat([self.training_df, self.testing_df], ignore_index=True)
-
-    def __init__(self, csv_file:str):
-        self.df = pd.read_csv(csv_file, sep=',', header=0)
+    def __init__(self, training_csv_file:str, testing_csv_file:str):
+        self.training_df = pd.read_csv(training_csv_file, sep=',', header=0)
+        self.testing_df = pd.read_csv(testing_csv_file, sep=',', header=0)
+        self.df = pd.concat([self.training_df, self.testing_df], ignore_index=True)
 
     def __len__(self):
         return len(self.df)
@@ -239,18 +188,16 @@ if __name__=="__main__":
     logger.setLevel(logging.DEBUG)  # To disable the matplotlib font_manager logs.
 
     # Data loader
-    # For split dataset
-    data_dir = os.path.join(os.path.dirname(__file__), '../../../results/plot_results')
-    csv_file = os.path.join(data_dir, "rbd_variant_seq_sampled_ADO_1200.csv")
-    csv_name = csv_file.split("/")[-1]
-    seq_dataset = VariantSeqDataset(csv_file)
-
-    # # For full dataset
+    # # For split dataset
     # data_dir = os.path.join(os.path.dirname(__file__), '../../../results/plot_results')
-    # training_csv_file = os.path.join(data_dir, "rbd_train_variant_seq.csv")
-    # testing_csv_file = os.path.join(data_dir, "rbd_test_variant_seq.csv")
-    # csv_name = "rbd_variant_seq_full.csv"
-    # seq_dataset = VariantSeqDataset(training_csv_file, testing_csv_file)
+    # csv_file = os.path.join(data_dir, "rbd_variant_seq_sampled_ADO_1200.csv")
+    # csv_name = csv_file.split("/")[-1]
+    # seq_dataset = VariantSeqDataset(csv_file)
+
+    # For full dataset
+    data_dir = os.path.join(os.path.dirname(__file__), '../../../data/spike_variant')
+    csv_file = os.path.join(data_dir, "spikeprot0528.clean.uniq.noX.RBD_variants.csv")
+    seq_dataset = VariantSeqDataset(csv_file)
     
     # -= HYPERPARAMETERS =-
     embedding_dim = 768
@@ -265,7 +212,7 @@ if __name__=="__main__":
     n_test_batches = -1
 
     tokenizer = ProteinTokenizer(max_len, mask_prob)
-    embedder = NLPEmbedding(embedding_dim, max_len,dropout)
+    embedder = NLPEmbedding(embedding_dim, max_len, dropout)
     vocab_size = len(token_to_index)
 
     USE_GPU = True
@@ -274,15 +221,15 @@ if __name__=="__main__":
     torch.manual_seed(0) # Dataloader uses its own random number generator.
     seq_loader = DataLoader(seq_dataset, batch_size=batch_size, shuffle=True, drop_last=False)
 
-    best_pth = "../../../results/ddp-2023-08-16_08-41/ddp-2023-08-16_08-41_best_model_weights.pth"
+    best_pth = "../../../results/ddp_runner/ddp-2023-08-16_08-41/ddp-2023-08-16_08-41_best_model_weights.pth"
     parameter_file = os.path.join(os.path.dirname(__file__), best_pth)  # pick the pth with the best accuracy.
 
-    runner = BERT_Runner(run_dir=run_dir, csv_name=csv_name, parameter_file=parameter_file, vocab_size=vocab_size, 
+    runner = BERT_Runner(run_dir=run_dir, csv_name=csv_file, parameter_file=parameter_file, vocab_size=vocab_size, 
                          embedding_dim=embedding_dim, dropout=dropout, max_len=max_len, 
                          mask_prob=mask_prob, n_transformer_layers=n_transformer_layers,
                          n_attn_heads=attn_heads, batch_size=batch_size, device=device)
 
-    logger.info(f'Run results located in this directory: {run_dir}')
+    logger.info(f'Run log file located in this directory: {run_dir}')
     logger.info(f'Using device: {device}')
     logger.info(f'Total seqs: {len(seq_dataset)}')
     logger.info(f'batch_size: {batch_size}')

@@ -3,10 +3,10 @@
 Plot 2d and 3d UMAP, and T-SNE plots from embeddings generateed from clustering.py.
 """
 
-#import umap
 import os
-import ast
 import umap
+import umap.plot
+import pickle
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
@@ -14,55 +14,49 @@ import seaborn as sns
 from mpl_toolkits.mplot3d import Axes3D 
 from sklearn.manifold import TSNE
 
-def extract_embedding(tsv_file:str):
-    embeddings =  []
-    variants = []
-    variant_labels = set()
-
-    chunks = pd.read_csv(tsv_file, delimiter="\t", chunksize=100)  # Changed the chunksize to a larger value
-    for chunk in chunks:
-        print(f"\tLoading in chunk... {chunk['variant'].tolist()}", flush=True)
-        embeddings.extend(chunk["embedding"].apply(ast.literal_eval).tolist())
-        variants.extend(chunk["variant"].tolist())
-        variant_labels.update(chunk["variant"].tolist())
-
-    embedding_matrix = np.stack(embeddings)  
+def extract_embedding_pickle(pickle_file:str):
+    with open(pickle_file, 'rb') as f:
+        seq_ids, variants, embedding_matrix = pickle.load(f)
+    
+    variant_labels = sorted(set(variants))
+    print(variant_labels)
+    
+    embedding_matrix = embedding_matrix.reshape(embedding_matrix.shape[0], -1)
     print(embedding_matrix.shape)
 
-    return embedding_matrix, variants, sorted(list(variant_labels))
+    return embedding_matrix, variants, variant_labels
 
-def plot_umap(tsv_file, embedding_matrix, all_variants):
+def plot_umap(pickle_file, embedding_matrix, all_variants):
     """
-    tsv_file: input data - includes seq_id, variant, and flattened embeddings
+    pickle_file: input data - includes seq_id, variant, and flattened embeddings
     embedding_matrix: stacked flattened embeddings from each entry
-    all_variants: variants from tsv_file from each entry 
-    variant_labels: all the unique possible labels 
+    all_variants: variants from pickle_file from each entry 
     """
     mapper = umap.UMAP(n_neighbors=25, 
                        n_components=2,
                        min_dist = 0.1, 
                        init = 'random', 
-                       n_jobs= -1,
                        random_state=0).fit(embedding_matrix)
 
     # Create a scatter plot
-    p = umap.plot.points(mapper, labels=all_variants, theme='fire')
-    umap.plot.plt.title('UMAP Visualization of Embeddings')
-    save_as = tsv_file.replace(".tsv", "_umap.png")
-    umap.plot.plt.savefig(save_as)
+    p = umap.plot.points(mapper, labels=np.array(all_variants), color_key_cmap='Paired', background='black')
+    plt.title('UMAP Visualization of Embeddings')
+    plt.tight_layout()
 
-def plot_umap_plt(tsv_file, embedding_matrix, all_variants, variant_labels):
+    save_as = pickle_file.replace(".pkl", "_umap.png")
+    plt.savefig(save_as)
+
+def plot_umap_plt(pickle_file, embedding_matrix, all_variants, variant_labels):
     """
-    tsv_file: input data - includes seq_id, variant, and flattened embeddings
+    pickle_file: input data - includes seq_id, variant, and flattened embeddings
     embedding_matrix: stacked flattened embeddings from each entry
-    all_variants: variants from tsv_file from each entry 
+    all_variants: variants from pickle_file from each entry 
     variant_labels: all the unique possible labels 
     """
     umap_embeddings = umap.UMAP(n_neighbors=50, 
                                 n_components=2,
                                 min_dist = 0.1, 
                                 init = 'random', 
-                                n_jobs= -1,
                                 random_state=0).fit_transform(embedding_matrix)
 
     cmap = sns.color_palette("tab20", len(variant_labels))
@@ -81,21 +75,20 @@ def plot_umap_plt(tsv_file, embedding_matrix, all_variants, variant_labels):
     plt.legend(handles=legend_handles, loc='upper right', bbox_to_anchor=(1.16, 1))
     plt.tight_layout()
 
-    save_as = tsv_file.replace(".tsv", "_umap.png")
+    save_as = pickle_file.replace(".pkl", "_umap_plt.png")
     plt.savefig(save_as)
     
-def plot_3d_umap_plt(tsv_file, embedding_matrix, all_variants, variant_labels):
+def plot_3d_umap(pickle_file, embedding_matrix, all_variants, variant_labels):
     """
-    tsv_file: input data - includes seq_id, variant, and flattened embeddings
+    pickle_file: input data - includes seq_id, variant, and flattened embeddings
     embedding_matrix: stacked flattened embeddings from each entry
-    all_variants: variants from tsv_file from each entry 
+    all_variants: variants from pickle_file from each entry 
     variant_labels: all the unique possible labels 
     """
     umap_embeddings = umap.UMAP(n_neighbors=50, 
                                 n_components=3, 
                                 min_dist = 0.1,
                                 init='random', 
-                                n_jobs= -1,
                                 random_state=0).fit_transform(embedding_matrix)
 
     cmap = sns.color_palette("tab20", len(variant_labels))
@@ -116,14 +109,14 @@ def plot_3d_umap_plt(tsv_file, embedding_matrix, all_variants, variant_labels):
     plt.legend(handles=legend_handles, loc='upper right')
     plt.tight_layout()
     
-    save_as = tsv_file.replace(".tsv", "_3d_umap.png")
+    save_as = pickle_file.replace(".pkl", "_3d_umap.png")
     plt.savefig(save_as)
 
-def plot_tsne(tsv_file, embedding_matrix, all_variants, variant_labels):
+def plot_tsne(pickle_file, embedding_matrix, all_variants, variant_labels):
     """
-    tsv_file: input data - includes seq_id, variant, and flattened embeddings
+    pickle_file: input data - includes seq_id, variant, and flattened embeddings
     embedding_matrix: stacked flattened embeddings from each entry
-    all_variants: variants from tsv_file from each entry 
+    all_variants: variants from pickle_file from each entry 
     variant_labels: all the unique possible labels 
     """
     tsne_embeddings = TSNE(n_components=2, 
@@ -147,18 +140,19 @@ def plot_tsne(tsv_file, embedding_matrix, all_variants, variant_labels):
     plt.legend(handles=legend_handles, loc='upper right')
     plt.tight_layout()
     
-    save_as = tsv_file.replace(".tsv", "_tsne.png")
+    save_as = pickle_file.replace(".pkl", "_tsne.png")
     plt.savefig(save_as)
 
 if __name__=="__main__":
     data_dir = os.path.join(os.path.dirname(__file__), '../../../results')
-    tsv_file = os.path.join(data_dir, "plot_results/rbd_variant_seq_sampled_ADO_1200_embedding.tsv")
+    pickle_file = os.path.join(data_dir, "<insert>.pkl")
     print(f"Extracting embeddings")
-    embedding_matrix, variants, variant_labels = extract_embedding(tsv_file)
+    embedding_matrix, variants, variant_labels = extract_embedding_pickle(pickle_file)
     print(f"Plotting 2D UMAP")
-    plot_umap(tsv_file, embedding_matrix, variants, variant_labels)
+    plot_umap(pickle_file, embedding_matrix, variants)
+    plot_umap_plt(pickle_file, embedding_matrix, variants, variant_labels)
     print(f"Plotting 3D UMAP")
-    plot_3d_umap(tsv_file, embedding_matrix, variants, variant_labels)
+    plot_3d_umap(pickle_file, embedding_matrix, variants, variant_labels)
     print(f"Plotting T-SNE")
-    plot_tsne(tsv_file, embedding_matrix, variants, variant_labels)
+    plot_tsne(pickle_file, embedding_matrix, variants, variant_labels)
     print(f"Done!")
