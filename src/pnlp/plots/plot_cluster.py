@@ -20,7 +20,9 @@ def extract_embedding_pickle(pickle_file:str):
     
     variant_labels = sorted(set(variants))
     print(variant_labels)
+    print(len(seq_ids))
     
+    embedding_matrix = np.vstack(embedding_matrix)
     embedding_matrix = embedding_matrix.reshape(embedding_matrix.shape[0], -1)
     print(embedding_matrix.shape)
 
@@ -144,8 +146,8 @@ def plot_tsne(pickle_file, embedding_matrix, all_variants, variant_labels):
     plt.savefig(save_as)
 
 if __name__=="__main__":
-    data_dir = os.path.join(os.path.dirname(__file__), '../../../results')
-    pickle_file = os.path.join(data_dir, "<insert>.pkl")
+    data_dir = os.path.join(os.path.dirname(__file__), '../../../data')
+    pickle_file = os.path.join(data_dir, "spike_variants/spikeprot0528.clean.uniq.noX.RBD_variants_embedding.pkl")
     print(f"Extracting embeddings")
     embedding_matrix, variants, variant_labels = extract_embedding_pickle(pickle_file)
     print(f"Plotting 2D UMAP")

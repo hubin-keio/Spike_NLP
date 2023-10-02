@@ -34,9 +34,7 @@ from pnlp.model.bert import BERT
 logger = logging.getLogger(__name__)
 
 class BERT_Runner:
-    """
-    BERT model runner
-    """
+    """ BERT model runner """
 
     def __init__(self,
                  run_dir: str,
@@ -154,16 +152,9 @@ class BERT_Runner:
 
 class VariantSeqDataset(Dataset):
 
-    # For split dataset
-    # def __init__(self, csv_file:str):
-    #     self.df = pd.read_csv(csv_file, sep=',', header=0)
+    def __init__(self, csv_file:str):
+        self.df = pd.read_csv(csv_file, sep=',', header=0)
     
-    # For full dataset
-    def __init__(self, training_csv_file:str, testing_csv_file:str):
-        self.training_df = pd.read_csv(training_csv_file, sep=',', header=0)
-        self.testing_df = pd.read_csv(testing_csv_file, sep=',', header=0)
-        self.df = pd.concat([self.training_df, self.testing_df], ignore_index=True)
-
     def __len__(self):
         return len(self.df)
 
@@ -187,15 +178,8 @@ if __name__=="__main__":
         datefmt = '%m/%d/%Y %I:%M:%S %p')
     logger.setLevel(logging.DEBUG)  # To disable the matplotlib font_manager logs.
 
-    # Data loader
-    # # For split dataset
-    # data_dir = os.path.join(os.path.dirname(__file__), '../../../results/plot_results')
-    # csv_file = os.path.join(data_dir, "rbd_variant_seq_sampled_ADO_1200.csv")
-    # csv_name = csv_file.split("/")[-1]
-    # seq_dataset = VariantSeqDataset(csv_file)
-
-    # For full dataset
-    data_dir = os.path.join(os.path.dirname(__file__), '../../../data/spike_variant')
+    # Dataset
+    data_dir = os.path.join(os.path.dirname(__file__), '../../../data/spike_variants')
     csv_file = os.path.join(data_dir, "spikeprot0528.clean.uniq.noX.RBD_variants.csv")
     seq_dataset = VariantSeqDataset(csv_file)
     
