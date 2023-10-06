@@ -68,7 +68,7 @@ class BERT_Runner:
         self.model.to(self.device)
 
         # Create the file name
-        self.save_as = csv_name.replace(".csv", "_embedding.pkl")
+        self.save_as = csv_name.replace(".csv", "_cluster_embedding.pkl")
 
     def load_parameters(self):
         """
@@ -90,14 +90,8 @@ class BERT_Runner:
             assert getattr(self, hp) == saved_hyperparameters[hp], f"{hp} mismatch"
 
         # For loading from ddp models, need to remove 'module.bert.' in state_dict
-        load_ddp = False
-        new_state_dict = OrderedDict()
-        for k, v in state_dict.items():
-            if k[:11] == 'module.bert':
-                load_ddp = True
-                new_state_dict[k[12:]] = v   # remove 'module.bert.'
-            else: break
-        if load_ddp: state_dict = new_state_dict
+        prefix = 'module.bert.'
+        state_dict = {i[len(prefix):]: j for i, j in state_dict.items() if prefix in i[:len(prefix)]}
 
         self.model.load_state_dict(state_dict)
         random.setstate(saved_state['random_state'])
@@ -125,9 +119,7 @@ class BERT_Runner:
                               total = len(seq_data),
                               bar_format='{l_bar}{r_bar}')
 
-        all_embeddings = []
-        all_seq_ids = []
-        all_variants = []
+        all_seq_ids, all_variants, all_embeddings = [], [], []
 
         for i, batch_data in data_iter:
             if max_batch > 0 and i >= max_batch:
@@ -137,14 +129,17 @@ class BERT_Runner:
             tokenized_seqs = self.tokenizer(seqs)
             tokenized_seqs = tokenized_seqs.to(self.device)  # input tokens with masks
 
+            print(tokenized_seqs[0].shape)
+
             with torch.no_grad():
                 hidden_states = self.model(tokenized_seqs)
                 embeddings = hidden_states.cpu().numpy()
-
-                # Append data to lists
-                all_embeddings.append(embeddings)
-                all_seq_ids.extend(seq_ids)
-                all_variants.extend(variants)
+                
+                for seq_id, variant, embedding in zip(seq_ids, variants, embeddings):
+                    if embedding.shape == (223, 768):
+                        all_seq_ids.append(seq_id)
+                        all_variants.append(variant)
+                        all_embeddings.append(embedding)
 
         # Save data to a pickle file
         with open(self.save_as, 'wb') as f:

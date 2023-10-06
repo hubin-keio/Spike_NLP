@@ -4,6 +4,8 @@ Plot 2d and 3d UMAP, and T-SNE plots from embeddings generateed from clustering.
 """
 
 import os
+os.environ["CUDA_VISIBLE_DEVICES"] = "2"  # set which GPU to use for tsnecuda
+
 import umap
 import umap.plot
 import pickle
@@ -11,18 +13,33 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
+from tsnecuda import TSNE # gpu tsne
+#from sklearn.manifold import TSNE
 from mpl_toolkits.mplot3d import Axes3D 
-from sklearn.manifold import TSNE
 
-def extract_embedding_pickle(pickle_file:str):
+def extract_embedding_pickle(pickle_file:str, ado:bool):
+    """
+    Extracts seq_ids, variants, and embeddings from embedding pickle.
+    If ado, data is filtered to just 'Alpha', 'Delta', 'Omicron' variants.
+    """
     with open(pickle_file, 'rb') as f:
-        seq_ids, variants, embedding_matrix = pickle.load(f)
-    
+        pkl_seq_ids, pkl_variants, pkl_embeddings = pickle.load(f)
+
+    if ado:
+        seq_ids, variants, embeddings = [], [], []
+        for i, variant in enumerate(pkl_variants):
+            if variant in ['Alpha', 'Delta', 'Omicron']:
+                seq_ids.append(pkl_seq_ids[i])
+                variants.append(variant)
+                embeddings.append(pkl_embeddings[i])
+    else:
+        seq_ids, variants, embeddings = pkl_seq_ids, pkl_variants, pkl_embeddings
+
     variant_labels = sorted(set(variants))
     print(variant_labels)
     print(len(seq_ids))
     
-    embedding_matrix = np.vstack(embedding_matrix)
+    embedding_matrix = np.vstack(embeddings)
     embedding_matrix = embedding_matrix.reshape(embedding_matrix.shape[0], -1)
     print(embedding_matrix.shape)
 
@@ -122,9 +139,8 @@ def plot_tsne(pickle_file, embedding_matrix, all_variants, variant_labels):
     variant_labels: all the unique possible labels 
     """
     tsne_embeddings = TSNE(n_components=2, 
-                            learning_rate='auto', 
-                            init='random', 
-                            perplexity=25).fit_transform(embedding_matrix)
+                           learning_rate=0, 
+                           perplexity=25).fit_transform(embedding_matrix)
     
     cmap = sns.color_palette("tab20", len(variant_labels))
     variant_colors = {variant: cmap[i] for i, variant in enumerate(variant_labels)}
@@ -147,9 +163,10 @@ def plot_tsne(pickle_file, embedding_matrix, all_variants, variant_labels):
 
 if __name__=="__main__":
     data_dir = os.path.join(os.path.dirname(__file__), '../../../data')
-    pickle_file = os.path.join(data_dir, "spike_variants/spikeprot0528.clean.uniq.noX.RBD_variants_embedding.pkl")
+    pickle_file = os.path.join(data_dir, "spike_variants/spikeprot0528.clean.uniq.noX.RBD_variants_cluster_embedding.pkl")
     print(f"Extracting embeddings")
-    embedding_matrix, variants, variant_labels = extract_embedding_pickle(pickle_file)
+    ado = True
+    embedding_matrix, variants, variant_labels = extract_embedding_pickle(pickle_file, ado)
     print(f"Plotting 2D UMAP")
     plot_umap(pickle_file, embedding_matrix, variants)
     plot_umap_plt(pickle_file, embedding_matrix, variants, variant_labels)
