@@ -342,14 +342,8 @@ class Model_Runner:
             assert getattr(self, hp) == saved_hyperparameters[hp], f"{hp} mismatch"
 
         # For loading from ddp models, they have 'module' in keys of state_dict
-        load_ddp = False
-        new_state_dict = OrderedDict()
-        for k, v in state_dict.items():
-            if k[:6] == 'module':
-                load_ddp = True
-                new_state_dict[k[7:]] = v   # remove 'module'
-            else: break
-        if load_ddp: state_dict = new_state_dict
+        prefix = 'module.'
+        state_dict = {i[len(prefix):]: j for i, j in state_dict.items() if prefix in i[:len(prefix)]}
 
         # Load pretrained state_dict
         self.model.load_state_dict(state_dict)
