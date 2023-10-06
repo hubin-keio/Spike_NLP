@@ -19,15 +19,17 @@ larger meta data file:
   plotted to show distribution of the variants among Accession IDs 
   within the training and testing databases. 
 
-Amino Acid Distribution
-
-> 
+Other distribution plots included, such as 
+    - amino acid distribution (related to the above desc), 
+    - sequence length distribution,
+    - variant distribution of the highest frequency sequence length.
 """
 import os
 import tqdm
 import torch
 import pandas as pd
 import numpy as np
+import seaborn as sns
 import matplotlib.pyplot as plt
 from collections import defaultdict
 from torch.utils.data import DataLoader
@@ -179,6 +181,102 @@ def plot_aa_distribution(training_csv_file:str, testing_csv_file:str, save_as:st
     plt.tight_layout()
     plt.savefig(distribution_file_name)
 
+def plot_seq_length_distibution(csv_file:str):
+    """
+    Plots the sequence length distribution %s of a given csv file that has
+    at least these 2 columns:
+        - sequence: full sequence
+        - variant: variant name
+    """
+    full_df = pd.read_csv(csv_file, sep=',', header=0)
+    full_df['seq_length'] = full_df['sequence'].apply(len)
+
+    # Calculate % of total 
+    counts = full_df.groupby(['seq_length', 'variant']).size().reset_index(name='counts')
+    total_counts = counts.groupby('seq_length')['counts'].sum().reset_index(name='total_counts')
+    counts = pd.merge(counts, total_counts, on='seq_length')
+    counts['percentage'] = round((counts['counts'] / counts['total_counts']) * 100, 3)
+    
+    # Calculate the frequency of each sequence length
+    freq = full_df['seq_length'].value_counts()
+    freq_perc = ((freq / freq.sum()) * 100).sort_index()
+
+    # Plotting with broken axis
+    # Create two subplots to simulate a broken y-axis effect
+    f, (ax1, ax2) = plt.subplots(2, 1, sharex=True, figsize=(10, 6))
+
+    # Plot the first subplot for smaller values
+    ax1.bar(freq_perc.index, freq_perc.values)
+    ax1.set_ylim(1, 100)  # Adjust these values as per your specific dataset
+
+    # Plot the second subplot for larger values
+    ax2.bar(freq_perc.index, freq_perc.values)
+    ax2.set_ylim(0, 0.08)  # Adjust these values as per your specific dataset
+
+    # Hide the spines between the subplots
+    ax1.spines['bottom'].set_visible(False)
+    ax2.spines['top'].set_visible(False)
+    ax1.xaxis.tick_top()
+    ax1.tick_params(labeltop=False)
+    ax2.xaxis.tick_bottom()
+
+    # Highlighting the bar with the highest frequency
+    max_value = freq_perc.max()
+    max_index = freq_perc.idxmax()
+    ax1.annotate(f'{max_value:.2f}%', 
+                 xy=(max_index, max_value), 
+                 xytext=(max_index - 10, max_value - 10), 
+                 arrowprops=dict(facecolor='black', arrowstyle='-'),
+                 fontsize=8, color='black')
+
+    plt.suptitle('Sequence Length Distribution %', fontsize=16)
+    plt.xlabel('Sequence Length')
+    f.text(0.04, 0.5, 'Percentage', va='center', rotation='vertical')
+
+    save_as = csv_file.replace('.csv', '_seq_length_dist.png')
+    plt.savefig(save_as)
+
+    # Calling the plot_most_seq_variant_distribution function with the highest frequency sequence length
+    plot_most_seq_variant_distribution(csv_file, False, full_df, max_index)
+    plot_most_seq_variant_distribution(csv_file, True, full_df, max_index)
+
+def plot_most_seq_variant_distribution(csv_file: str, ado: bool, full_df, seq_length: int):    
+    """
+    Called by 'plot_seq_length_distibution'. Plots the variant distribution
+    of the sequence with the highest frequency sequence length occurence.
+    If 'ado' is called, the data is filtered to 'Alpha', 'Delta', 'Omicron'
+    variants.
+    """
+    if ado:
+        # Filter the DataFrame to keep only the selected variants
+        selected_variants = ['Alpha', 'Omicron', 'Delta']
+        full_df = full_df[full_df['variant'].isin(selected_variants)]
+
+    counts = full_df[full_df['seq_length'] == seq_length].groupby(['variant']).size().reset_index(name='counts')
+    total_count = counts['counts'].sum()
+    counts['percentage'] = (counts['counts'] / total_count) * 100
+
+    # Plotting
+    plt.figure(figsize=(10, 6))
+    bars = sns.barplot(data=counts, x='variant', y='percentage', palette="viridis")
+    
+    # Adding labels on top of the bars
+    for p in bars.patches:
+        bars.annotate(f'{p.get_height():.2f}%', 
+                     (p.get_x() + p.get_width() / 2., p.get_height()), 
+                     ha = 'center', va = 'baseline', 
+                     xytext = (0, 4), 
+                     textcoords = 'offset points')
+
+    plt.title(f'Variant Distribution Percentage for Sequence Length {seq_length}')
+    plt.xlabel('Variant')
+    plt.ylabel('Percentage')
+    plt.xticks(rotation=45)
+    plt.tight_layout()
+
+    save_as = csv_file.replace('.csv', f'_variant_{"ado_" if ado else ""}distribution_{seq_length}.png')
+    plt.savefig(save_as)
+
 def calc_num_seq_ids(file_name:str):
     line_count = 0
 
@@ -195,32 +293,39 @@ if __name__ == '__main__':
     data_dir = os.path.join(os.path.dirname(__file__), '../../../data')
     results_dir = os.path.join(os.path.dirname(__file__), '../../../results/plot_results')
 
-    # Data loader
-    db_file = os.path.join(data_dir, 'SARS_CoV_2_spike_noX_RBD.db')
-    train_dataset = SeqDataset(db_file, "train")
-    test_dataset = SeqDataset(db_file, "test")
+    # Sequence length dist plotting on full variant csv, no test/train split
+    full_csv =  os.path.join(data_dir, "spike_variants/spikeprot0528.clean.uniq.noX.RBD_variants.csv")
+    plot_seq_length_distibution(full_csv)
 
-    # Meta data
-    meta_data_file = os.path.join(data_dir, 'spike/spikeprot0528.clean.uniq.noX.RBD.metadata_variants.txt')  
+    # BELOW: code that runs the description above, sequence length dist is separate
+    # # Data loader
+    # db_file = os.path.join(data_dir, 'SARS_CoV_2_spike_noX_RBD.db')
+    # train_dataset = SeqDataset(db_file, "train")
+    # test_dataset = SeqDataset(db_file, "test")
 
-    # Extract data that includes variants
-    meta_data_df, dropped_meta_data_df = extract_variant(meta_data_file)
-    print(f"Number of seq_ids dropped due to NaN in 'variant' column: {len(dropped_meta_data_df)}")
-    print(f"Number of seq_ids left post NaN removal in 'variant' column: {len(meta_data_df)}")
+    # # Meta data
+    # meta_data_file = os.path.join(data_dir, 'spike/spikeprot0528.clean.uniq.noX.RBD.metadata_variants.txt')  
 
-    # Combine variants with training and testing data
-    batch_size = 64
-    torch.manual_seed(0)
-    train_seq_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, drop_last=True)
-    test_seq_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=True, drop_last=True)
+    # # Extract data that includes variants
+    # meta_data_df, dropped_meta_data_df = extract_variant(meta_data_file)
+    # print(f"Number of seq_ids dropped due to NaN in 'variant' column: {len(dropped_meta_data_df)}")
+    # print(f"Number of seq_ids left post NaN removal in 'variant' column: {len(meta_data_df)}")
+
+    # # Combine variants with training and testing data
+    # batch_size = 64
+    # torch.manual_seed(0)
+    # train_seq_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, drop_last=True)
+    # test_seq_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=True, drop_last=True)
    
-    train_variant_csv, train_no_variant_csv = add_variants(train_seq_loader, meta_data_df, data_dir, "train")
-    test_variant_csv, test_no_variant_csv = add_variants(test_seq_loader, meta_data_df, data_dir, "test")
-    print(f"Number of seq_ids in training database: (w/ variant label):{calc_num_seq_ids(train_variant_csv)}, (w/o variant label):{calc_num_seq_ids(train_no_variant_csv)} ")
-    print(f"Number of seq_ids in testing database: (w/ variant label):{calc_num_seq_ids(test_variant_csv)}, (w/o variant label):{calc_num_seq_ids(test_no_variant_csv)} ")
+    # train_variant_csv, train_no_variant_csv = add_variants(train_seq_loader, meta_data_df, data_dir, "train")
+    # test_variant_csv, test_no_variant_csv = add_variants(test_seq_loader, meta_data_df, data_dir, "test")
+    # print(f"Number of seq_ids in training database: (w/ variant label):{calc_num_seq_ids(train_variant_csv)}, (w/o variant label):{calc_num_seq_ids(train_no_variant_csv)} ")
+    # print(f"Number of seq_ids in testing database: (w/ variant label):{calc_num_seq_ids(test_variant_csv)}, (w/o variant label):{calc_num_seq_ids(test_no_variant_csv)} ")
 
     # Make variant distribution plot
     # train_variant_csv = os.path.join(results_dir, "rbd_train_variant_seq.csv")
     # test_variant_csv = os.path.join(results_dir, "rbd_test_variant_seq.csv")
-    plot_variant_distribution(train_variant_csv, test_variant_csv, results_dir)
-    plot_aa_distribution(train_variant_csv, test_variant_csv, results_dir)
+    # plot_variant_distribution(train_variant_csv, test_variant_csv, results_dir)
+    # plot_aa_distribution(train_variant_csv, test_variant_csv, results_dir)
+
+
