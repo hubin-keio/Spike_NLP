@@ -15,7 +15,6 @@ import tqdm
 import torch
 from torch.utils.data import DataLoader
 import torch.nn as nn
-import logging
 from collections import defaultdict, OrderedDict
 from pnlp.db.dataset import SeqDataset, initialize_db
 from pnlp.embedding.tokenizer import ProteinTokenizer, token_to_index, index_to_token
@@ -218,9 +217,12 @@ class Model_Runner:
                     self.aa_preds_tracker[key] = [self.aa_preds_tracker[key].get(epoch, 0) for epoch in range(1, num_epochs + 1)]
                     data_row = ", ".join(str(val) for val in self.aa_preds_tracker[key])
                     fg.write(f"{key}, {data_row}\n")
-
-            plot_accuracy_stats.plot_aa_perc_pred_stats_heatmap(self.aa_preds_tracker, self.run_preds_csv, save=True)
+            
             logger.info(f'Predictions csv saved to {os.path.basename(self.run_preds_csv)}')
+
+            if self.load_model and num_epochs == 1:
+                # Run heatmap after loading in best weights file & running over full dataset once
+                plot_accuracy_stats.plot_aa_perc_pred_stats_heatmap(self.aa_preds_tracker, self.run_preds_csv, save=True)
 
     def epoch_iteration(self, num_epochs: int, max_batch: int, data_loader, mode:str):
         """
@@ -279,7 +281,6 @@ class Model_Runner:
                 aa_keys = [f"{token_to_aa.get(token.item())}->{token_to_aa.get(pred_token.item())}" for token, pred_token in zip(labels[masked_locations], predicted_tokens[masked_locations])]
                 # Update the tracker as going through keys (counting occurences)
                 self.aa_pred_counter.update((aa_key, self.aa_pred_counter[aa_key] + 1) for aa_key in aa_keys)                
-
 
         accuracy = correct_predictions / total_masked
         return total_epoch_loss, accuracy
@@ -380,17 +381,17 @@ if __name__=="__main__":
     test_dataset = SeqDataset(db_file, "test")
 
     # -= HYPERPARAMETERS =-
-    embedding_dim = 768
+    embedding_dim = 320 # 768
     dropout = 0.1
     max_len = 280
     mask_prob = 0.15
     n_transformer_layers = 12
-    attn_heads = 12
+    attn_heads = 10 # 12
     hidden = embedding_dim
 
     batch_size = 64
-    n_test_baches = 20
-    num_epochs = 105
+    n_test_baches = -1
+    num_epochs = 1
 
     lr = 1e-05
     weight_decay = 0.01
@@ -402,12 +403,12 @@ if __name__=="__main__":
     vocab_size = len(token_to_index)
 
     SAVE_MODEL = True
-    LOAD_MODEL = False
+    LOAD_MODEL = True
     CHECKPOINT = False
-    model_pth = ''
+    model_pth = os.path.join(results_dir, '../ddp_runner/ddp-2023-10-06_20-16/ddp-2023-10-06_20-16_best_model_weights.pth')
 
     USE_GPU = True
-    device = torch.device("cuda:0" if torch.cuda.is_available() and USE_GPU else "cpu")
+    device = torch.device("cuda:1" if torch.cuda.is_available() and USE_GPU else "cpu")
 
     torch.manual_seed(0)        # Dataloader uses its own random number generator.
     train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, drop_last=False)

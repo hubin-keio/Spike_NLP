@@ -215,7 +215,7 @@ def load_nlp_embedder(model_pth):
 
     # Embedder set up
     max_len = 280
-    embedding_dim = 768
+    embedding_dim = 320
     dropout = 0.1
 
     embedder = NLPEmbedding(embedding_dim, max_len, dropout)
@@ -240,10 +240,10 @@ def load_bert_embedder(model_pth):
     # BERT model hyperparameters
     max_len = 280
     mask_prob = 0.15
-    embedding_dim = 768
+    embedding_dim = 320 #768
     dropout = 0.1
     n_transformer_layers = 12
-    n_attn_heads = 12
+    n_attn_heads = 10 # 12
 
     embedder = BERT(embedding_dim, dropout, max_len, mask_prob, n_transformer_layers, n_attn_heads)
     embedder.load_state_dict(state_dict)
@@ -264,7 +264,7 @@ def generate_embedding_pickle(csv_file:str, dms_dataset:Dataset, embed_method:st
             best pretrained masked protein language model, tensor format.
             ex: not putting the output, but should be of shape: torch.Size([, 768])
     """
-    embedded_file = csv_file.replace('.csv', f'_{embed_method}_embedded.pkl')
+    embedded_file = csv_file.replace('.csv', f'_{embed_method}_320_embedded.pkl')
     dms_list = []
 
     for i, item in enumerate(dms_dataset):
@@ -293,8 +293,9 @@ if __name__=="__main__":
     refseq = 'NITNLCPFGEVFNATRFASVYAWNRKRISNCVADYSVLYNSASFSTFKCYGVSPTKLNDLCFTNVYADSFVIRGDEVRQIAPGQTGKIADYNYKLPDDFTGCVIAWNSNNLDSKVGGNYNYLYRLFRKSNLKPFERDISTEIYQAGSTPCNGVEGFNCYFPLQSYGFQPTNGVGYQPYRVVVLSFELLHAPATVCGPKKST'
 
     # Load pretrained spike model to embedder
-    model_pth = os.path.join(results_dir, 'ddp_runner/ddp-2023-08-16_08-41/ddp-2023-08-16_08-41_best_model_weights.pth')
-    device = 'cuda' if torch.cuda.is_available() else 'cpu' 
+    #model_pth = os.path.join(results_dir, 'ddp_runner/ddp-2023-08-16_08-41/ddp-2023-08-16_08-41_best_model_weights.pth') # 768 dim
+    model_pth = os.path.join(results_dir, 'ddp_runner/ddp-2023-10-06_20-16/ddp-2023-10-06_20-16_best_model_weights.pth') # 320 dim
+    device = 'cuda:2' if torch.cuda.is_available() else 'cpu' 
     embed_method = "rbd_learned"
  
     # Dataset, training and test dataset pickles
@@ -307,8 +308,8 @@ if __name__=="__main__":
 
     # Test the pickle loader
     print("\nTesting pickle loader")
-    embedded_train_pkl = dms_train_csv.replace('.csv', f'_{embed_method}_embedded.pkl')
-    embedded_test_pkl = dms_test_csv.replace('.csv', f'_{embed_method}_embedded.pkl')
+    embedded_train_pkl = dms_train_csv.replace('.csv', f'_{embed_method}_320_embedded.pkl')
+    embedded_test_pkl = dms_test_csv.replace('.csv', f'_{embed_method}_320_embedded.pkl')
 
     train_pkl_loader = PKL_Loader(embedded_train_pkl, device)
     test_pkl_loader = PKL_Loader(embedded_test_pkl, device)

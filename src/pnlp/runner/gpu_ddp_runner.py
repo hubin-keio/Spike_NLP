@@ -216,7 +216,7 @@ class Model_Runner():
                     dist.all_gather_object(preds, self.aa_pred_counter) 
                     
                     if self.device == 0:
-                        fh.write(f"{epoch}, {metrics['train_loss']:.2f}, {metrics['train_accuracy']:.2f}\n")
+                        fh.write(f"{epoch}, {metrics['train_loss']:.2f}, {metrics['train_accuracy']:.2f}, test_loss: {metrics['test_loss']:.2f}, test_accuracy: {metrics['test_accuracy']:.2f}\n")
                         fh.flush()
 
                         # Add values to tracker dict from across processes counter dicts
@@ -265,7 +265,6 @@ class Model_Runner():
                         data_row = ", ".join(str(val) for val in self.aa_preds_tracker[key])
                         fg.write(f"{key}, {data_row}\n")
                 
-                plot_accuracy_stats.plot_aa_perc_pred_stats_heatmap(self.aa_preds_tracker, self.run_preds_csv, save=True)
                 logger.info(f'Predictions csv saved to {os.path.basename(self.run_preds_csv)}')
 
     def epoch_iteration(self, num_epochs: int, max_batch: int, data_loader, mode:str):
@@ -445,17 +444,17 @@ def main():
     test_dataset = SeqDataset(db_file, "test")
 
     ## -=HYPERPARAMETERS=- ##
-    embedding_dim = 768 # 768 or 1536, 768 will be our default going forward
+    embedding_dim = 320 # 768
     dropout=0.1
     max_len = 280
     mask_prob = 0.15
     n_transformer_layers = 12
-    attn_heads = 12
+    attn_heads = 10 # 12
     hidden = embedding_dim
 
     batch_size = 64
-    n_test_baches = 10
-    num_epochs = 10
+    n_test_baches = -1
+    num_epochs = 100
 
     lr = 1e-05
     weight_decay = 0.01

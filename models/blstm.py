@@ -225,19 +225,21 @@ def load_embedding_pkl(embedding_method: str, device: str) -> tuple:
         - the dimension size needed for running the blstm model.
     """
     base_dir = os.path.dirname(__file__)
-    data_dirs = {"rbd_learned": os.path.join(base_dir, '../data/dms'),
+    data_dirs = {"rbd_learned_768": os.path.join(base_dir, '../data/dms'),
+                 "rbd_learned_320": os.path.join(base_dir, '../data/dms'),
                  "rbd_bert": os.path.join(base_dir, '../data/dms'),
                  "esm": os.path.join(base_dir, '../../Spike_NLP/models'),
                  "one_hot": os.path.join(base_dir, '../data/dms')}
     
-    file_names = {"rbd_learned": ("mutation_binding_Kds_train_rbd_learned_embedded.pkl", "mutation_binding_Kds_test_rbd_learned_embedded.pkl", [201, 768]),
+    file_names = {"rbd_learned_768": ("mutation_binding_Kds_train_rbd_learned_768_embedded.pkl", "mutation_binding_Kds_test_rbd_learned_768_embedded.pkl", [201, 768]),
+                  "rbd_learned_320": ("mutation_binding_Kds_train_rbd_learned_320_embedded.pkl", "mutation_binding_Kds_test_rbd_learned_320_embedded.pkl", [201, 320]),
                   "rbd_bert": ("mutation_binding_Kds_train_rbd_bert_embedded.pkl", "mutation_binding_Kds_test_rbd_bert_embedded.pkl", [201, 768]),
                   "esm": ("mutation_binding_kds_ESM_train_embedded.pkl", "mutation_binding_kds_ESM_test_embedded.pkl", [203, 320]),
                   "one_hot": ("mutation_binding_Kds_train_one_hot_embedded.pkl", "mutation_binding_Kds_test_one_hot_embedded.pkl", [201, 22])}
     
     data_dir = data_dirs.get(embedding_method.lower())
     if not data_dir:
-        raise ValueError("Invalid embedding type. Choose from 'rbd_learned', 'rbd_bert', 'esm', or 'one_hot'.")
+        raise ValueError("Invalid embedding type. Choose from 'rbd_learned_768', 'rbd_learned_320', 'rbd_bert', 'esm', or 'one_hot'.")
 
     train_file, test_file, input_shape = file_names.get(embedding_method.lower())
     embedded_train_pkl = os.path.join(data_dir, train_file)
@@ -251,7 +253,7 @@ def load_embedding_pkl(embedding_method: str, device: str) -> tuple:
 if __name__=='__main__':
 
     results_dir = os.path.join(os.path.dirname(__file__), '../results/blstm')
-    embedding_method = "rbd_bert"
+    embedding_method = "rbd_learned_320"
 
     now = datetime.datetime.now()
     date_hour_minute = now.strftime("%Y-%m-%d_%H-%M")
