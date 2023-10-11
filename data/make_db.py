@@ -27,26 +27,14 @@ def make_alphaseq_db(db_name:str, train_file:str, test_file:str):
     create_table_sql = '''CREATE TABLE {} (id INTEGER PRIMARY KEY AUTOINCREMENT,
                                            POI TEXT,
                                            Sequence TEXT,
-                                           Target TEXT,
-                                           Assay TEXT,
-                                           Replicate TEXT,
-                                           Pred_affinity TEXT,
-                                           HC TEXT,
-                                           LC TEXT,
-                                           CDRH1 TEXT,
-                                           CDRH2 TEXT,
-                                           CDRH3 TEXT,
-                                           CDRL1 TEXT,
-                                           CDRL2 TEXT,
-                                           CDRL3 TEXT,
-                                           Mean_Affinity TEXT)'''
+                                           Mean_Affinity FLOAT)'''
 
     db_cursor.execute(create_table_sql.format("train"))
     db_cursor.execute(create_table_sql.format("test"))
 
     for mode, table_name in zip([training_seqs, testing_seqs], ["train", "test"]):
         for record in mode:
-            db_cursor.execute(f"INSERT INTO {table_name} (POI, Sequence, Target, Assay, Replicate, Pred_affinity, HC, LC, CDRH1, CDRH2, CDRH3, CDRL1, CDRL2, CDRL3, Mean_Affinity) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)", record)
+            db_cursor.execute(f"INSERT INTO {table_name} (POI, Sequence, Mean_Affinity) VALUES (?,?,?)", record)
         conn.commit()
 
     conn.close()
@@ -70,17 +58,49 @@ def make_fasta_db(db_name:str, train_file:str, test_file:str):
     conn.close()
     print(f'Database {db_name} initialized.')
 
+def test_db_contents(db_name:str):
+    conn = sqlite3.connect(db_name)
+    db_cursor = conn.cursor()
+
+    # Check if the tables 'train' and 'test' exist and fetch their content
+    for table_name in ['train', 'test']:
+        db_cursor.execute(f"SELECT name FROM sqlite_master WHERE type='table' AND name='{table_name}'")
+        if db_cursor.fetchone() is not None:
+            print(f"The table '{table_name}' exists.")
+            print(f"First 5 rows of the '{table_name}' table:")
+            db_cursor.execute(f"SELECT * FROM {table_name} LIMIT 5")
+            rows = db_cursor.fetchall()
+            for row in rows:
+                print(row)
+            print("")
+        else:
+            print(f"The table '{table_name}' does not exist.")
+            return False
+
+    conn.close()
+    return True
+
 if __name__ == '__main__':
     data_dir = os.path.dirname(__file__)
 
     # AlphaSeq
-    # train_csv = os.path.join(data_dir, 'alphaseq/clean_avg_alpha_seq_test.csv')
-    # test_csv = os.path.join(data_dir, 'alphaseq/clean_avg_alpha_seq_train.csv')
+    # train_csv = os.path.join(data_dir, 'alphaseq/clean_avg_alpha_seq_selected_train.csv')
+    # test_csv = os.path.join(data_dir, 'alphaseq/clean_avg_alpha_seq_selected_test.csv')
     # db_name = 'AlphaSeq.db'
     # make_alphaseq_db(db_name, train_csv, test_csv)
+
+    # if test_db_contents(db_name):
+    #     print(f"The database '{db_name}' is initialized correctly.")
+    # else:
+    #     print(f"There is an issue with the database '{db_name}'.")
 
     # RBD
     # train_fasta = os.path.join(data_dir, 'spike/spikeprot0528.clean.uniq.noX.RBD_train.fasta')
     # test_fasta = os.path.join(data_dir, 'spike/spikeprot0528.clean.uniq.noX.RBD_test.fasta')
     # db_name = 'SARS_CoV_2_spike_noX_RBD.db'
     # make_fasta_db(db_name, train_fasta, test_fasta)
+
+    # if test_db_contents(db_name):
+    #     print(f"The database '{db_name}' is initialized correctly.")
+    # else:
+    #     print(f"There is an issue with the database '{db_name}'.")

@@ -111,14 +111,14 @@ if __name__ == '__main__':
 
     # RBD w/ metadata variants
     # (new split, old data may no longer retain 80/20 split after removal of entries w/ no variant label)
-    train_csv_file = os.path.join(data_dir, "spike_variants/rbd_train_variant_seq.csv")
-    test_csv_file = os.path.join(data_dir, "spike_variants/rbd_test_variant_seq.csv")
-    train_df = pd.read_csv(train_csv_file, sep=',', header=0)
-    test_df = pd.read_csv(test_csv_file, sep=',', header=0)
-    combined_df = pd.concat([train_df, test_df], ignore_index=True)
-    input_csv = os.path.join(data_dir, "spike_variants/spikeprot0528.clean.uniq.noX.RBD_variants.csv")
-    combined_df.to_csv(input_csv, index=False)
-    split_csv(rnd_seed, input_csv)
+    # train_csv_file = os.path.join(data_dir, "spike_variants/rbd_train_variant_seq.csv")
+    # test_csv_file = os.path.join(data_dir, "spike_variants/rbd_test_variant_seq.csv")
+    # train_df = pd.read_csv(train_csv_file, sep=',', header=0)
+    # test_df = pd.read_csv(test_csv_file, sep=',', header=0)
+    # combined_df = pd.concat([train_df, test_df], ignore_index=True)
+    # input_csv = os.path.join(data_dir, "spike_variants/spikeprot0528.clean.uniq.noX.RBD_variants.csv")
+    # combined_df.to_csv(input_csv, index=False)
+    # split_csv(rnd_seed, input_csv)
 
     # DMS
     # input_csv = os.path.join(data_dir, 'dms/mutation_binding_Kds.csv')
@@ -126,7 +126,11 @@ if __name__ == '__main__':
 
     # AlphaSeq
     # input_csv = os.path.join(data_dir, 'alphaseq/clean_avg_alpha_seq.csv')
-    # split_csv(rnd_seed, input_csv)
+    # full_df = pd.read_csv(input_csv, sep=',', header=0)
+    # selected_df = full_df[['POI', 'Sequence', 'Mean_Affinity']]
+    # selected_csv = input_csv.replace(".csv", "_selected.csv")
+    # selected_df.to_csv(selected_csv, index=False)
+    # split_csv(rnd_seed, selected_csv)
 
     # RBD
     # input_fa = os.path.join(data_dir, 'spike/spikeprot0528.clean.uniq.noX.RBD.fasta')
