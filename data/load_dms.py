@@ -8,11 +8,11 @@ import torch
 import pickle
 import numpy as np
 import torch.nn as nn
+from transformers import AutoTokenizer, EsmModel 
 from torch.nn.utils.rnn import pad_sequence
 from torch.utils.data import Dataset, random_split
 from collections import OrderedDict
-from pnlp.db.dataset import SeqDataset, initialize_db
-from pnlp.embedding.tokenizer import ProteinTokenizer, token_to_index, index_to_token
+from pnlp.embedding.tokenizer import ProteinTokenizer
 from pnlp.embedding.nlp_embedding import NLPEmbedding
 from pnlp.model.language import ProteinLM
 from pnlp.model.bert import BERT
@@ -20,7 +20,7 @@ from pnlp.model.bert import BERT
 class DMS_Dataset(Dataset):
     """ Binding Dataset """
     
-    def __init__(self, csv_file:str, refseq:str, device: str, embed_method:str):
+    def __init__(self, csv_file:str, model_pth:str, refseq:str, device: str, embed_method:str):
         """
         Load sequence label and binding data from csv file and generate full
         sequence using the label and refseq.
@@ -28,7 +28,7 @@ class DMS_Dataset(Dataset):
         csv_file: a csv file with sequence label and kinetic data.
         refseq: reference sequence (wild type sequence)
         device: cuda or cpu
-        embed_method: "rbd_learned", "rbd_bert", "one_hot"
+        embed_method: "rbd_learned", "rbd_bert", "esm", "one_hot"
 
         The csv file has this format (notice that ka_sd is not always a number):
 
@@ -52,15 +52,18 @@ class DMS_Dataset(Dataset):
             return labels, log10_ka
 
         self.csv_file = csv_file
+        self.model_pth = model_pth
         self.labels, self.log10_ka = _load_csv()
         self.refseq = list(refseq)
         self.device = device
         self.embed_method = embed_method
 
         if embed_method == "rbd_learned":
-            self.embedder = load_nlp_embedder(model_pth).to(self.device) 
+            self.embedder = load_nlp_embedder(self.model_pth).to(self.device) 
         elif embed_method == "rbd_bert":
-            self.embedder = load_bert_embedder(model_pth).to(self.device) 
+            self.embedder = load_bert_embedder(self.model_pth).to(self.device) 
+        elif embed_method == "esm":
+            self.embedder = EsmModel.from_pretrained("facebook/esm2_t6_8M_UR50D").to(self.device) 
 
     def __len__(self) -> int:
         return len(self.labels)
@@ -131,6 +134,19 @@ class DMS_Dataset(Dataset):
 
             return reshaped_hidden_states
 
+        def _esm(seq:str) -> torch.Tensor:
+            """ Embed sequence feature using ESM model. """
+
+            tokenizer = AutoTokenizer.from_pretrained("facebook/esm2_t33_650M_UR50D")
+            tokenized_seq = tokenizer(seq,return_tensors="pt").to(self.device)
+            self.embedder.eval()
+
+            with torch.no_grad():
+                last_hidden_states = self.embedder(**tokenized_seq).last_hidden_state
+                reshaped_hidden_states = last_hidden_states.squeeze(0)
+            
+            return reshaped_hidden_states
+
         def _one_hot(seq: str) -> torch.Tensor:
             """ Embed sequence feature using one-hot. """
 
@@ -150,6 +166,8 @@ class DMS_Dataset(Dataset):
             return _rbd_bert(seq)
         elif self.embed_method == 'one_hot':
             return _one_hot(seq)
+        elif self.embed_method == 'esm':
+            return _esm(seq)
         else:
             print(f'Undefined embedding method: {self.embed_method}', file=sys.stderr)
             sys.exit(1)
@@ -172,20 +190,9 @@ class PKL_Loader(Dataset):
                 self.labels = [entry['seq_id'] for entry in dms_list]
                 self.log10_ka = [entry['log10_ka'] for entry in dms_list]
                 self.embeddings = [entry['embedding'] for entry in dms_list]
-
-        def _load_esm():
-            with open(pickle_file, 'rb') as f:
-                esm_list = pickle.load(f)
-            
-                self.labels = [entry['labels'] for entry in esm_list]
-                self.log10_ka = [entry['log10_ka'] for entry in esm_list]
-                self.embeddings = [entry['esm_embeddings'].squeeze(0) for entry in esm_list] # torch.Size([1, x, y]) -> torch.Size([x, y])
-
+ 
         self.device = device
-        if "esm" in pickle_file.lower():
-            _load_esm()
-        else:
-            _load_dms()
+        _load_dms()
 
     def __len__(self) -> int:
         return len(self.labels)
@@ -240,10 +247,10 @@ def load_bert_embedder(model_pth):
     # BERT model hyperparameters
     max_len = 280
     mask_prob = 0.15
-    embedding_dim = 320 #768
+    embedding_dim = 320 
     dropout = 0.1
     n_transformer_layers = 12
-    n_attn_heads = 10 # 12
+    n_attn_heads = 10 
 
     embedder = BERT(embedding_dim, dropout, max_len, mask_prob, n_transformer_layers, n_attn_heads)
     embedder.load_state_dict(state_dict)
@@ -264,7 +271,7 @@ def generate_embedding_pickle(csv_file:str, dms_dataset:Dataset, embed_method:st
             best pretrained masked protein language model, tensor format.
             ex: not putting the output, but should be of shape: torch.Size([, 768])
     """
-    embedded_file = csv_file.replace('.csv', f'_{embed_method}_320_embedded.pkl')
+    embedded_file = csv_file.replace('.csv', f'_{embed_method}_embedded.pkl')
     dms_list = []
 
     for i, item in enumerate(dms_dataset):
@@ -295,21 +302,21 @@ if __name__=="__main__":
     # Load pretrained spike model to embedder
     #model_pth = os.path.join(results_dir, 'ddp_runner/ddp-2023-08-16_08-41/ddp-2023-08-16_08-41_best_model_weights.pth') # 768 dim
     model_pth = os.path.join(results_dir, 'ddp_runner/ddp-2023-10-06_20-16/ddp-2023-10-06_20-16_best_model_weights.pth') # 320 dim
-    device = 'cuda:2' if torch.cuda.is_available() else 'cpu' 
-    embed_method = "rbd_learned"
+    device = 'cuda:0' if torch.cuda.is_available() else 'cpu' 
+    embed_method = "esm"
  
     # Dataset, training and test dataset pickles
     print("Making train pickle.")
-    train_dataset = DMS_Dataset(dms_train_csv, refseq, device, embed_method)
+    train_dataset = DMS_Dataset(dms_train_csv, model_pth, refseq, device, embed_method)
     generate_embedding_pickle(dms_train_csv, train_dataset, embed_method)
     print("\nMaking test pickle.")
-    test_dataset = DMS_Dataset(dms_test_csv, refseq, device, embed_method)
+    test_dataset = DMS_Dataset(dms_test_csv, model_pth, refseq, device, embed_method)
     generate_embedding_pickle(dms_test_csv, test_dataset, embed_method)
 
     # Test the pickle loader
     print("\nTesting pickle loader")
-    embedded_train_pkl = dms_train_csv.replace('.csv', f'_{embed_method}_320_embedded.pkl')
-    embedded_test_pkl = dms_test_csv.replace('.csv', f'_{embed_method}_320_embedded.pkl')
+    embedded_train_pkl = dms_train_csv.replace('.csv', f'_{embed_method}_embedded.pkl')
+    embedded_test_pkl = dms_test_csv.replace('.csv', f'_{embed_method}_embedded.pkl')
 
     train_pkl_loader = PKL_Loader(embedded_train_pkl, device)
     test_pkl_loader = PKL_Loader(embedded_test_pkl, device)

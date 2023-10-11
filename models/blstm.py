@@ -168,6 +168,7 @@ def plot_history_rmse_only(embedding_method:str, metrics: dict, n_train: int, n_
     plt.ylabel('Average RMSE per sample')
     plt.tight_layout()
     plt.savefig(save_as + '-rmse.png')
+    history_df.to_csv(save_as + '.csv', index=False)
 
 def plot_history(embedding_method:str, metrics: dict, n_train: int, n_test: int, save_as: str):
     """ Plot training and testing history per epoch. """
@@ -196,7 +197,6 @@ def plot_history(embedding_method:str, metrics: dict, n_train: int, n_test: int,
     plt.suptitle(f'MSE and RMSE Over Epochs Using {embedding_method} Embedding')
     plt.tight_layout()
     plt.savefig(save_as + '-mse_rmse.png')
-    history_df.to_csv(save_as + '.csv', index=False)
 
 def count_parameters(model):
     """
@@ -224,36 +224,38 @@ def load_embedding_pkl(embedding_method: str, device: str) -> tuple:
         - length of the loaders, and
         - the dimension size needed for running the blstm model.
     """
-    base_dir = os.path.dirname(__file__)
-    data_dirs = {"rbd_learned_768": os.path.join(base_dir, '../data/dms'),
-                 "rbd_learned_320": os.path.join(base_dir, '../data/dms'),
-                 "rbd_bert": os.path.join(base_dir, '../data/dms'),
-                 "esm": os.path.join(base_dir, '../../Spike_NLP/models'),
-                 "one_hot": os.path.join(base_dir, '../data/dms')}
+    data_dir = os.path.join(os.path.dirname(__file__), '../data/dms')
     
-    file_names = {"rbd_learned_768": ("mutation_binding_Kds_train_rbd_learned_768_embedded.pkl", "mutation_binding_Kds_test_rbd_learned_768_embedded.pkl", [201, 768]),
-                  "rbd_learned_320": ("mutation_binding_Kds_train_rbd_learned_320_embedded.pkl", "mutation_binding_Kds_test_rbd_learned_320_embedded.pkl", [201, 320]),
-                  "rbd_bert": ("mutation_binding_Kds_train_rbd_bert_embedded.pkl", "mutation_binding_Kds_test_rbd_bert_embedded.pkl", [201, 768]),
-                  "esm": ("mutation_binding_kds_ESM_train_embedded.pkl", "mutation_binding_kds_ESM_test_embedded.pkl", [203, 320]),
-                  "one_hot": ("mutation_binding_Kds_train_one_hot_embedded.pkl", "mutation_binding_Kds_test_one_hot_embedded.pkl", [201, 22])}
+    file_names = {"rbd_learned": ("mutation_binding_Kds_train_rbd_learned_embedded.pkl", 
+                                  "mutation_binding_Kds_test_rbd_learned_embedded.pkl", 
+                                  [201, 320]),
+                  "rbd_bert": ("mutation_binding_Kds_train_rbd_bert_embedded.pkl", 
+                               "mutation_binding_Kds_test_rbd_bert_embedded.pkl", 
+                               [201, 320]),
+                  "esm": ("mutation_binding_Kds_train_esm_embedded.pkl", 
+                          "mutation_binding_Kds_test_esm_embedded.pkl", 
+                          [203, 320]),
+                  "one_hot": ("mutation_binding_Kds_train_one_hot_embedded.pkl", 
+                              "mutation_binding_Kds_test_one_hot_embedded.pkl", 
+                              [201, 22])}
     
-    data_dir = data_dirs.get(embedding_method.lower())
-    if not data_dir:
-        raise ValueError("Invalid embedding type. Choose from 'rbd_learned_768', 'rbd_learned_320', 'rbd_bert', 'esm', or 'one_hot'.")
-
-    train_file, test_file, input_shape = file_names.get(embedding_method.lower())
+    data_files = file_names.get(embedding_method.lower())
+    if not data_files:
+        raise ValueError("Invalid embedding type. Choose from 'rbd_learned', 'rbd_bert', 'esm', or 'one_hot'.")
+    
+    train_file, test_file, input_shape = data_files
     embedded_train_pkl = os.path.join(data_dir, train_file)
     embedded_test_pkl = os.path.join(data_dir, test_file)
     
-    train_pkl_loader = PKL_Loader(embedded_train_pkl, device)
-    test_pkl_loader = PKL_Loader(embedded_test_pkl, device)
+    train_pkl_loader = PKL_Loader(embedded_train_pkl, device) 
+    test_pkl_loader = PKL_Loader(embedded_test_pkl, device)    
     
     return train_pkl_loader, test_pkl_loader, len(train_pkl_loader), len(test_pkl_loader), input_shape[1]
 
 if __name__=='__main__':
 
     results_dir = os.path.join(os.path.dirname(__file__), '../results/blstm')
-    embedding_method = "rbd_learned_320"
+    embedding_method = "rbd_learned"
 
     now = datetime.datetime.now()
     date_hour_minute = now.strftime("%Y-%m-%d_%H-%M")
@@ -261,11 +263,11 @@ if __name__=='__main__':
     os.makedirs(run_dir, exist_ok = True)
 
     # Run setup
-    n_epochs = 500
+    n_epochs = 1000
     batch_size = 32
     max_batch = -1
     lr = 1e-5
-    device = "cuda:2"
+    device = "cuda:0"
 
     train_pkl_loader, test_pkl_loader, train_size, test_size, lstm_size = load_embedding_pkl(embedding_method, device)
 
