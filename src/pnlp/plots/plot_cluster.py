@@ -4,18 +4,23 @@ Plot 2d and 3d UMAP, and T-SNE plots from embeddings generateed from clustering.
 """
 
 import os
-os.environ["CUDA_VISIBLE_DEVICES"] = "2"  # set which GPU to use for tsnecuda
+os.environ["CUDA_VISIBLE_DEVICES"] = "3"  # set which GPU to use for tsnecuda
 
+import datetime
 import umap
 import umap.plot
+import logging
 import pickle
+import psutil
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
-from tsnecuda import TSNE # gpu tsne
-#from sklearn.manifold import TSNE
+#from tsnecuda import TSNE # gpu tsne
+from sklearn.manifold import TSNE
 from mpl_toolkits.mplot3d import Axes3D 
+
+logger = logging.getLogger(__name__)
 
 def extract_embedding_pickle(pickle_file:str, ado:bool):
     """
@@ -40,7 +45,6 @@ def extract_embedding_pickle(pickle_file:str, ado:bool):
     print(len(seq_ids))
     
     embedding_matrix = np.vstack(embeddings)
-    embedding_matrix = embedding_matrix.reshape(embedding_matrix.shape[0], -1)
     print(embedding_matrix.shape)
 
     return embedding_matrix, variants, variant_labels
@@ -138,9 +142,13 @@ def plot_tsne(pickle_file, embedding_matrix, all_variants, variant_labels):
     all_variants: variants from pickle_file from each entry 
     variant_labels: all the unique possible labels 
     """
+    # tsne_embeddings = TSNE(n_components=2, 
+    #                        learning_rate=0, 
+    #                        perplexity=25).fit_transform(embedding_matrix)
     tsne_embeddings = TSNE(n_components=2, 
-                           learning_rate=0, 
-                           perplexity=25).fit_transform(embedding_matrix)
+                           learning_rate='auto', 
+                           init='random', 
+                           perplexity=3).fit_transform(embedding_matrix)
     
     cmap = sns.color_palette("tab20", len(variant_labels))
     variant_colors = {variant: cmap[i] for i, variant in enumerate(variant_labels)}
@@ -161,17 +169,49 @@ def plot_tsne(pickle_file, embedding_matrix, all_variants, variant_labels):
     save_as = pickle_file.replace(".pkl", "_tsne.png")
     plt.savefig(save_as)
 
+def memory_usage() -> str:
+    """ Returns string of current memory usage of Python process """
+    process = psutil.Process(os.getpid())
+    memory_info = process.memory_info()
+    return f"Memory usage: {memory_info.rss / (1024 * 1024):.2f} MB"
+
 if __name__=="__main__":
+
+    now = datetime.datetime.now()
+    date_hour_minute = now.strftime("%Y-%m-%d_%H-%M")
+    run_dir = os.path.join(os.path.dirname(__file__), f'../../../results/clustering/plot_cluster-{date_hour_minute}')
+    os.makedirs(run_dir, exist_ok = True)
+
+    # Add logging configuration
+    log_file = os.path.join(run_dir, 'memory-usage.log')
+    logging.basicConfig(filename=log_file,
+                        level=logging.INFO,
+                        format='%(asctime)s - %(levelname)s - %(name)s - %(message)s',
+                        datefmt='%Y-%m-%d %H:%M:%S')
+
+    logging.info(f"Init memory usage: {memory_usage()}")
     data_dir = os.path.join(os.path.dirname(__file__), '../../../data')
-    pickle_file = os.path.join(data_dir, "spike_variants/spikeprot0528.clean.uniq.noX.RBD_variants_cluster_embedding.pkl")
+    pickle_file = os.path.join(data_dir, "spike_variants/spikeprot0528.clean.uniq.noX.RBD_variants_cluster_320_embedding.pkl")
+    logging.info(f"Using this pickle: {pickle_file}")
+    
     print(f"Extracting embeddings")
+    logging.info(f"Pre embedding extraction memory usage: {memory_usage()}")
     ado = True
     embedding_matrix, variants, variant_labels = extract_embedding_pickle(pickle_file, ado)
-    print(f"Plotting 2D UMAP")
-    plot_umap(pickle_file, embedding_matrix, variants)
-    plot_umap_plt(pickle_file, embedding_matrix, variants, variant_labels)
-    print(f"Plotting 3D UMAP")
-    plot_3d_umap(pickle_file, embedding_matrix, variants, variant_labels)
+    logging.info(f"Post embedding extraction memory usage: {memory_usage()}")
+
+    # print(f"Plotting 2D UMAP")
+    # plot_umap(pickle_file, embedding_matrix, variants)
+    # logging.info(f"2D UMAP memory usage: {memory_usage()}")
+    # plot_umap_plt(pickle_file, embedding_matrix, variants, variant_labels)
+    # logging.info(f"2D UMAP memory usage: {memory_usage()}")
+
+    # print(f"Plotting 3D UMAP")
+    # plot_3d_umap(pickle_file, embedding_matrix, variants, variant_labels)
+    # logging.info(f"3D UMAP memory usage: {memory_usage()}")
+
     print(f"Plotting T-SNE")
+    logging.info(f"Pre T-SNE memory usage: {memory_usage()}")
     plot_tsne(pickle_file, embedding_matrix, variants, variant_labels)
-    print(f"Done!")
+    logging.info(f"Post T-SNE memory usage: {memory_usage()}")
+    

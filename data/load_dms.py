@@ -241,8 +241,9 @@ def load_bert_embedder(model_pth):
     state_dict = saved_state['model_state_dict']
 
     # For loading from ddp models, they have 'module.bert.' in keys of state_dict
-    prefix = 'module.bert.'
-    state_dict = {i[len(prefix):]: j for i, j in state_dict.items() if prefix in i[:len(prefix)]}
+    if 'ddp' in model_pth:
+        prefix = 'module.bert.'
+        state_dict = {i[len(prefix):]: j for i, j in state_dict.items() if prefix in i[:len(prefix)]}
 
     # BERT model hyperparameters
     max_len = 280
@@ -303,7 +304,7 @@ if __name__=="__main__":
     #model_pth = os.path.join(results_dir, 'ddp_runner/ddp-2023-08-16_08-41/ddp-2023-08-16_08-41_best_model_weights.pth') # 768 dim
     model_pth = os.path.join(results_dir, 'ddp_runner/ddp-2023-10-06_20-16/ddp-2023-10-06_20-16_best_model_weights.pth') # 320 dim
     device = 'cuda:0' if torch.cuda.is_available() else 'cpu' 
-    embed_method = "esm"
+    embed_method = "rbd_learned"
  
     # Dataset, training and test dataset pickles
     print("Making train pickle.")

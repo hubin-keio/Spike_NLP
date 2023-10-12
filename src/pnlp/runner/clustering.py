@@ -68,7 +68,7 @@ class BERT_Runner:
         self.model.to(self.device)
 
         # Create the file name
-        self.save_as = csv_name.replace(".csv", "_cluster_embedding.pkl")
+        self.save_as = csv_name.replace(".csv", "_cluster_320_embedding.pkl")
 
     def load_parameters(self):
         """
@@ -90,8 +90,9 @@ class BERT_Runner:
             assert getattr(self, hp) == saved_hyperparameters[hp], f"{hp} mismatch"
 
         # For loading from ddp models, need to remove 'module.bert.' in state_dict
-        prefix = 'module.bert.'
-        state_dict = {i[len(prefix):]: j for i, j in state_dict.items() if prefix in i[:len(prefix)]}
+        if 'ddp' in self.parameter_file:
+            prefix = 'module.bert.'
+            state_dict = {i[len(prefix):]: j for i, j in state_dict.items() if prefix in i[:len(prefix)]}
 
         self.model.load_state_dict(state_dict)
         random.setstate(saved_state['random_state'])
@@ -129,14 +130,12 @@ class BERT_Runner:
             tokenized_seqs = self.tokenizer(seqs)
             tokenized_seqs = tokenized_seqs.to(self.device)  # input tokens with masks
 
-            print(tokenized_seqs[0].shape)
-
             with torch.no_grad():
                 hidden_states = self.model(tokenized_seqs)
                 embeddings = hidden_states.cpu().numpy()
                 
                 for seq_id, variant, embedding in zip(seq_ids, variants, embeddings):
-                    if embedding.shape == (223, 768):
+                    if embedding.shape == (223, 320):
                         all_seq_ids.append(seq_id)
                         all_variants.append(variant)
                         all_embeddings.append(embedding)
@@ -162,7 +161,7 @@ if __name__=="__main__":
 
     now = datetime.datetime.now()
     date_hour_minute = now.strftime("%Y-%m-%d_%H-%M")
-    run_dir = os.path.join(os.path.dirname(__file__), f'../../../results/clustering_{date_hour_minute}')
+    run_dir = os.path.join(os.path.dirname(__file__), f'../../../results/clustering/clustering-{date_hour_minute}')
     os.makedirs(run_dir, exist_ok = True)
 
     # Add logging configuration
@@ -179,12 +178,12 @@ if __name__=="__main__":
     seq_dataset = VariantSeqDataset(csv_file)
     
     # -= HYPERPARAMETERS =-
-    embedding_dim = 768
+    embedding_dim = 320 # 768
     dropout=0.1
     max_len = 280
     mask_prob = 0.15
     n_transformer_layers = 12
-    attn_heads = 12
+    attn_heads = 10 # 12
     hidden = embedding_dim
 
     batch_size = 64
@@ -195,12 +194,12 @@ if __name__=="__main__":
     vocab_size = len(token_to_index)
 
     USE_GPU = True
-    device = torch.device("cuda:0" if torch.cuda.is_available() and USE_GPU else "cpu")
+    device = torch.device("cuda:1" if torch.cuda.is_available() and USE_GPU else "cpu")
 
     torch.manual_seed(0) # Dataloader uses its own random number generator.
     seq_loader = DataLoader(seq_dataset, batch_size=batch_size, shuffle=True, drop_last=False)
-
-    best_pth = "../../../results/ddp_runner/ddp-2023-08-16_08-41/ddp-2023-08-16_08-41_best_model_weights.pth"
+    # best_pth = "../../../results/ddp_runner/ddp-2023-08-16_08-41/ddp-2023-08-16_08-41_best_model_weights.pth" # 768
+    best_pth = "../../../results/ddp_runner/ddp-2023-10-06_20-16/ddp-2023-10-06_20-16_best_model_weights.pth" # 320
     parameter_file = os.path.join(os.path.dirname(__file__), best_pth)  # pick the pth with the best accuracy.
 
     runner = BERT_Runner(run_dir=run_dir, csv_name=csv_file, parameter_file=parameter_file, vocab_size=vocab_size, 
