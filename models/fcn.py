@@ -18,6 +18,7 @@ from pnlp.embedding.tokenizer import ProteinTokenizer, token_to_index, index_to_
 
 sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 from data.load_dms import PKL_Loader
+from src.pnlp.plots.plot_mse_rmse_history import calc_train_test_history
 
 class FCN(nn.Module):
     """ Fully Connected Network """
@@ -120,58 +121,6 @@ def save_model(model: FCN, optimizer: torch.optim.SGD, epoch: int, save_as: str)
                 'optimizer_state_dict': optimizer.state_dict()},
                 save_as)
 
-def plot_history_rmse_only(embedding_method:str, metrics: dict, n_train: int, n_test: int, save_as: str):
-    """ Plot training and testing history per epoch. """
-
-    history_df = pd.DataFrame(metrics)
-    history_df['train_loss'] = history_df['train_loss']/n_train  # average error per item
-    history_df['test_loss'] = history_df['test_loss']/n_test
-
-    history_df['train_rmse'] = np.sqrt(history_df['train_loss']) # rmse
-    history_df['test_rmse'] = np.sqrt(history_df['test_loss'])
-    
-    sns.set_theme()
-    sns.set_context('talk')
-    plt.figure(figsize=(12, 6))
-
-    # Single line plot for train and test RMSE
-    sns.lineplot(data=history_df[['train_rmse', 'test_rmse']], dashes=False)
-    
-    plt.title(f'RMSE Over Epochs using {embedding_method} Embedding')
-    plt.xlabel('Epochs')
-    plt.ylabel('Average RMSE per sample')
-    plt.tight_layout()
-    plt.savefig(save_as + '-rmse.png')
-    history_df.to_csv(save_as + '.csv', index=False)
-
-def plot_history(embedding_method:str, metrics: dict, n_train: int, n_test: int, save_as: str):
-    """ Plot training and testing history per epoch. """
-
-    history_df = pd.DataFrame(metrics)
-    history_df['train_loss'] = history_df['train_loss']/n_train  # average error per item
-    history_df['test_loss'] = history_df['test_loss']/n_test
-
-    history_df['train_rmse'] = np.sqrt(history_df['train_loss']) # rmse
-    history_df['test_rmse'] = np.sqrt(history_df['test_loss'])
-    
-    sns.set_theme()
-    sns.set_context('talk')
-
-    plt.ion()
-    fig, axes = plt.subplots(nrows=2, ncols=1, figsize=(12, 12))
-
-    sns.lineplot(data=history_df, x=history_df.index, y='train_loss', label='training', ax=axes[0])
-    sns.lineplot(data=history_df, x=history_df.index, y='test_loss', label='testing', ax=axes[0])
-    axes[0].set(xlabel='Epochs', ylabel='Average MSE per sample')
-
-    sns.lineplot(data=history_df, x=history_df.index, y='train_rmse', label='training', ax=axes[1])
-    sns.lineplot(data=history_df, x=history_df.index, y='test_rmse', label='testing', ax=axes[1])
-    axes[1].set(xlabel='Epochs', ylabel='Average RMSE per sample')
-
-    plt.suptitle(f'MSE and RMSE Over Epochs Using {embedding_method} Embedding')
-    plt.tight_layout()
-    plt.savefig(save_as + '-mse_rmse.png')
-
 def count_parameters(model):
     """
     Count model parameters and print a summary
@@ -208,14 +157,11 @@ def load_embedding_pkl(embedding_method: str, device: str) -> tuple:
                                [201, 320]),
                   "esm": ("mutation_binding_Kds_train_esm_embedded.pkl", 
                           "mutation_binding_Kds_test_esm_embedded.pkl", 
-                          [203, 320]),
-                  "one_hot": ("mutation_binding_Kds_train_one_hot_embedded.pkl", 
-                              "mutation_binding_Kds_test_one_hot_embedded.pkl", 
-                              [201, 22])}
+                          [203, 320])}
     
     data_files = file_names.get(embedding_method.lower())
     if not data_files:
-        raise ValueError("Invalid embedding type. Choose from 'rbd_learned', 'rbd_bert', 'esm', or 'one_hot'.")
+        raise ValueError("Invalid embedding type. Choose from 'rbd_learned', 'rbd_bert', or 'esm'.")
     
     train_file, test_file, input_shape = data_files
     embedded_train_pkl = os.path.join(data_dir, train_file)
@@ -237,22 +183,20 @@ if __name__=='__main__':
     os.makedirs(run_dir, exist_ok = True)
 
     # Run setup
-    n_epochs = 1000
+    n_epochs = 5000
     batch_size = 32
     max_batch = -1
     lr = 1e-5
-    device = "cuda:1"
+    device = torch.device("cuda:0")
 
     train_pkl_loader, test_pkl_loader, train_size, test_size, fcn_size = load_embedding_pkl(embedding_method, device)
 
     fcn_input_size = fcn_size      
     fcn_hidden_size = fcn_size 
-
     model = FCN(fcn_input_size, fcn_hidden_size, device)
 
     count_parameters(model)
     model_result = os.path.join(run_dir, f"fcn{date_hour_minute}_train_{train_size}_test_{test_size}")
-    metrics  = run_fcn(model, train_pkl_loader, test_pkl_loader, n_epochs, batch_size, lr, max_batch, device, model_result)      
-    plot_history_rmse_only(embedding_method, metrics, train_size, test_size, model_result)
-    plot_history(embedding_method, metrics, train_size, test_size, model_result)
+    metrics  = run_fcn(model, train_pkl_loader, test_pkl_loader, n_epochs, batch_size, lr, max_batch, device, model_result)   
+    calc_train_test_history(metrics, train_size, test_size, embedding_method, model_result)   
     
