@@ -14,27 +14,20 @@ def split_fasta(rnd_seed: int, input_fa: str):
     train_fa = input_fa.replace('.fasta', '_train.fasta')
     test_fa  = input_fa.replace('.fasta', '_test.fasta')
 
-    train_count = 0
-    test_count = 0
-    total_count = 0
-
     input_records = list(SeqIO.parse(input_fa, 'fasta'))
 
     random.seed(rnd_seed)
     random.shuffle(input_records)
 
-    with open(train_fa, 'w') as ft, open(test_fa, 'w') as fv:
+    split_idx = int(0.8 * len(input_records))
+    train_records = input_records[:split_idx]
+    test_records = input_records[split_idx:]
 
-        for record in input_records:
-            rnd = random.random()
-            if rnd > 0.2:
-                SeqIO.write(record, ft, 'fasta')
-                train_count += 1
-            else:
-                SeqIO.write(record, fv, 'fasta')
-                test_count += 1
-            total_count += 1
-    print(f'Total: {total_count}, Train: {train_count}, Test: {test_count}')
+    with open(train_fa, 'w') as ft, open(test_fa, 'w') as fv:
+        SeqIO.write(train_records, ft, 'fasta')
+        SeqIO.write(test_records, fv, 'fasta')
+
+    print(f'Total: {len(input_records)}, Train: {len(train_records)}, Test: {len(test_records)}')
 
 def split_csv(rnd_seed: int, input_csv: str):
     """
@@ -43,17 +36,17 @@ def split_csv(rnd_seed: int, input_csv: str):
     train_csv = input_csv.replace('.csv', '_train.csv')
     test_csv  = input_csv.replace('.csv', '_test.csv')
 
-    with open(input_csv, "r") as input:
-        reader = csv.reader(input)
+    with open(input_csv, "r") as input_file:
+        reader = csv.reader(input_file)
         header = next(reader)
         input_records = list(reader)
 
-    train_count = 0
-    test_count = 0
-    total_count = 0
-
     random.seed(rnd_seed)
     random.shuffle(input_records)
+
+    split_idx = int(0.8 * len(input_records))
+    train_records = input_records[:split_idx]
+    test_records = input_records[split_idx:]
 
     with open(train_csv, 'w') as ft, open(test_csv, 'w') as fv:
         train_writer = csv.writer(ft)
@@ -62,16 +55,13 @@ def split_csv(rnd_seed: int, input_csv: str):
         train_writer.writerow(header)
         test_writer.writerow(header)
 
-        for record in input_records:
-            rnd = random.random()
-            if rnd > 0.2:
-                train_writer.writerow(record)
-                train_count += 1
-            else:
-                test_writer.writerow(record)                
-                test_count += 1
-            total_count += 1
-    print(f'Total: {total_count}, Train: {train_count}, Test: {test_count}')
+        for record in train_records:
+            train_writer.writerow(record)
+
+        for record in test_records:
+            test_writer.writerow(record)
+
+    print(f'Total: {len(input_records)}, Train: {len(train_records)}, Test: {len(test_records)}')
 
 def sample_meta_csv(rnd_seed:int, train_csv_file: str, test_csv_file: str):
     """
@@ -86,7 +76,7 @@ def sample_meta_csv(rnd_seed:int, train_csv_file: str, test_csv_file: str):
 
     filtered_df = combined_df[combined_df['variant'].isin(["Alpha", "Delta", "Omicron"])]
     sampled_df = pd.concat([filtered_df[filtered_df['variant'] == variant].sample(n=400, random_state=rnd_seed)
-                            for variant in ["Alpha", "Delta", "Omicron"]])
+                            for variant in ["Alpha", "Delta", "Omicron"]]) # 400 of each
 
     save_as = train_csv_file.replace("_train_variant_seq.csv", f"_variant_seq_sampled_ADO_1200.csv")
     sampled_df.to_csv(save_as, index=False)
@@ -111,27 +101,24 @@ if __name__ == '__main__':
 
     # RBD w/ metadata variants
     # (new split, old data may no longer retain 80/20 split after removal of entries w/ no variant label)
-    # train_csv_file = os.path.join(data_dir, "spike_variants/rbd_train_variant_seq.csv")
-    # test_csv_file = os.path.join(data_dir, "spike_variants/rbd_test_variant_seq.csv")
-    # train_df = pd.read_csv(train_csv_file, sep=',', header=0)
-    # test_df = pd.read_csv(test_csv_file, sep=',', header=0)
-    # combined_df = pd.concat([train_df, test_df], ignore_index=True)
-    # input_csv = os.path.join(data_dir, "spike_variants/spikeprot0528.clean.uniq.noX.RBD_variants.csv")
-    # combined_df.to_csv(input_csv, index=False)
-    # split_csv(rnd_seed, input_csv)
-
-    # DMS
-    # input_csv = os.path.join(data_dir, 'dms/mutation_binding_Kds.csv')
-    # split_csv(rnd_seed, input_csv)
+    train_csv_file = os.path.join(data_dir, "spike_variants/rbd_train_variant_seq.csv")
+    test_csv_file = os.path.join(data_dir, "spike_variants/rbd_test_variant_seq.csv")
+    train_df = pd.read_csv(train_csv_file, sep=',', header=0)
+    test_df = pd.read_csv(test_csv_file, sep=',', header=0)
+    combined_df = pd.concat([train_df, test_df], ignore_index=True)
+    input_csv = os.path.join(data_dir, "spike_variants/spikeprot0528.clean.uniq.noX.RBD_variants.csv")
+    combined_df.to_csv(input_csv, index=False)
+    split_csv(rnd_seed, input_csv)
 
     # AlphaSeq
-    # input_csv = os.path.join(data_dir, 'alphaseq/clean_avg_alpha_seq.csv')
-    # full_df = pd.read_csv(input_csv, sep=',', header=0)
-    # selected_df = full_df[['POI', 'Sequence', 'Mean_Affinity']]
-    # selected_csv = input_csv.replace(".csv", "_selected.csv")
-    # selected_df.to_csv(selected_csv, index=False)
-    # split_csv(rnd_seed, selected_csv)
+    input_csv = os.path.join(data_dir, 'alphaseq/clean_avg_alpha_seq.csv')
+    full_df = pd.read_csv(input_csv, sep=',', header=0)
+    selected_df = full_df[['POI', 'Sequence', 'Mean_Affinity']]
+    selected_csv = input_csv.replace(".csv", "_selected.csv")
+    selected_df.to_csv(selected_csv, index=False)
+    split_csv(rnd_seed, selected_csv)
 
     # RBD
-    # input_fa = os.path.join(data_dir, 'spike/spikeprot0528.clean.uniq.noX.RBD.fasta')
-    # split_fasta(rnd_seed, input_fa)
+    input_fa = os.path.join(data_dir, 'spike/spikeprot0528.clean.uniq.noX.RBD.fasta')
+    split_fasta(rnd_seed, input_fa)
+

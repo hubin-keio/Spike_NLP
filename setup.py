@@ -21,7 +21,7 @@ setup(
     long_description=long_description,
     url='',
     author='Bin Hu, Michal Babinski, Kaetlyn Gibson',
-    author_email='{bhu, mbabinski, katelyn}@lanl.gov',
+    author_email='{bhu, mbabinski, kaetlyn}@lanl.gov',
     classifiers=[
         'Development Status :: 2 - Pre-Alpha',
         'Intended Audience :: Science/Research',

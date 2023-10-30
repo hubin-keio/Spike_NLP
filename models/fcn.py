@@ -1,24 +1,45 @@
 #!/usr/bin/env python
+"""
+FCN model, utilizing the DMS binding or expression datasets.
+"""
 
 import os
 import sys
 import tqdm
 import torch
+import pickle
 import datetime
-import numpy as np
-import seaborn as sns
-import pandas as pd
-import matplotlib.pyplot as plt
+from typing import Union
 from collections import defaultdict
 from torch import nn
-from torch.utils.data import DataLoader
-from typing import Union
-from prettytable import PrettyTable
-from pnlp.embedding.tokenizer import ProteinTokenizer, token_to_index, index_to_token
+from torch.utils.data import Dataset, DataLoader
+from model_util import save_model, count_parameters, calc_train_test_history
 
-sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
-from data.load_dms import PKL_Loader
-from src.pnlp.plots.plot_mse_rmse_history import calc_train_test_history
+class EmbeddedDMSDataset(Dataset):
+    """ Binding or Expression DMS Dataset """
+    
+    def __init__(self, pickle_file:str, device:str):
+        """
+        Load from pickle file:
+        - sequence label (seq_id), 
+        - binding or expression numerical target (log10Ka or ML_meanF), and 
+        - embeddings
+        """
+        with open(pickle_file, 'rb') as f:
+            dms_list = pickle.load(f)
+        
+            self.labels = [entry['seq_id'] for entry in dms_list]
+            self.numerical = [entry["log10Ka" if "binding" in pickle_file else "ML_meanF"] for entry in dms_list]
+            self.embeddings = [entry['embedding'] for entry in dms_list]
+ 
+        self.device = device
+
+    def __len__(self) -> int:
+        return len(self.labels)
+
+    def __getitem__(self, idx):
+        # label, feature, target
+        return self.labels[idx], self.embeddings[idx].to(self.device), self.numerical[idx]
 
 class FCN(nn.Module):
     """ Fully Connected Network """
@@ -41,9 +62,9 @@ class FCN(nn.Module):
         prediction = fcn_final_out.to(self.device)
 
         return prediction
- 
-def run_fcn(model, train_set, test_set, n_epochs: int, batch_size: int, lr:float, max_batch: Union[int, None], device: str, save_as: str):    
-    """ Run FCN model """
+
+def run_model(model, train_set, test_set, n_epochs: int, batch_size: int, lr:float, max_batch: Union[int, None], device: str, save_as: str):
+    """ Run a model through train and test epochs"""
     
     if not max_batch:
         max_batch = len(train_set)
@@ -74,7 +95,7 @@ def run_fcn(model, train_set, test_set, n_epochs: int, batch_size: int, lr:float
     return metrics
 
 def epoch_iteration(model, loss_fn, optimizer, data_loader, num_epochs: int, max_batch: int, device: str, mode: str):
-    """ Used in run_lstm """
+    """ Used in run_model """
     
     model.train() if mode=='train' else model.eval()
     loss = 0
@@ -90,6 +111,7 @@ def epoch_iteration(model, loss_fn, optimizer, data_loader, num_epochs: int, max
         
         label, feature, target = batch_data
         feature, target = feature.to(device), target.to(device) 
+        target = target.float()
 
         if mode == 'train':
             optimizer.zero_grad()
@@ -106,97 +128,41 @@ def epoch_iteration(model, loss_fn, optimizer, data_loader, num_epochs: int, max
                 loss += batch_loss.item()
 
     return loss
-
-def save_model(model: FCN, optimizer: torch.optim.SGD, epoch: int, save_as: str):
-    """
-    Save model parameters.
-
-    model: a FCN model object
-    optimizer: model optimizer
-    epoch: number of epochs in the end of the model running
-    save_as: file name for saveing the model.
-    """
-    torch.save({'epoch': epoch,
-                'model_state_dict': model.state_dict(),
-                'optimizer_state_dict': optimizer.state_dict()},
-                save_as)
-
-def count_parameters(model):
-    """
-    Count model parameters and print a summary
-
-    A nice hack from:
-    https://stackoverflow.com/a/62508086/1992369
-    """
-    table = PrettyTable(["Modules", "Parameters"])
-    total_params = 0
-    for name, parameter in model.named_parameters():
-        if not parameter.requires_grad: continue
-        params = parameter.numel()
-        table.add_row([name, params])
-        total_params+=params
-    print(table)
-    print(f"Total Trainable Params: {total_params}\n")
-    return total_params
-
-def load_embedding_pkl(embedding_method: str, device: str) -> tuple:
-    """
-    Load in embedding pkl based on embedding type, and set up the pkl loader.
-    Based on the embedding type, returns the 
-        - pkl loaders, 
-        - length of the loaders, and
-        - the dimension size needed for running the fcn model.
-    """
-    data_dir = os.path.join(os.path.dirname(__file__), '../data/dms')
-    
-    file_names = {"rbd_learned": ("mutation_binding_Kds_train_rbd_learned_embedded.pkl", 
-                                  "mutation_binding_Kds_test_rbd_learned_embedded.pkl", 
-                                  [201, 320]),
-                  "rbd_bert": ("mutation_binding_Kds_train_rbd_bert_embedded.pkl", 
-                               "mutation_binding_Kds_test_rbd_bert_embedded.pkl", 
-                               [201, 320]),
-                  "esm": ("mutation_binding_Kds_train_esm_embedded.pkl", 
-                          "mutation_binding_Kds_test_esm_embedded.pkl", 
-                          [203, 320])}
-    
-    data_files = file_names.get(embedding_method.lower())
-    if not data_files:
-        raise ValueError("Invalid embedding type. Choose from 'rbd_learned', 'rbd_bert', or 'esm'.")
-    
-    train_file, test_file, input_shape = data_files
-    embedded_train_pkl = os.path.join(data_dir, train_file)
-    embedded_test_pkl = os.path.join(data_dir, test_file)
-    
-    train_pkl_loader = PKL_Loader(embedded_train_pkl, device) 
-    test_pkl_loader = PKL_Loader(embedded_test_pkl, device)    
-    
-    return train_pkl_loader, test_pkl_loader, len(train_pkl_loader), len(test_pkl_loader), input_shape[1]
-
+ 
 if __name__=='__main__':
+    
+    dataset_folder = "expression" # specify
+    embed_method = "rbd_learned" # specify
+    unique_or_duplicate = "unique" # specify
 
-    results_dir = os.path.join(os.path.dirname(__file__), '../results/fcn')
-    embedding_method = "esm"
-
+    # Data/results directories
+    data_dir = os.path.join(os.path.dirname(__file__), f'../data/dms/{dataset_folder}/{unique_or_duplicate}')
+    results_dir = os.path.join(os.path.dirname(__file__), f'../results/fcn/dms/{dataset_folder}/{unique_or_duplicate}')
+    
+    # Create run directory for results
     now = datetime.datetime.now()
     date_hour_minute = now.strftime("%Y-%m-%d_%H-%M")
-    run_dir = os.path.join(results_dir, f"fcn_{embedding_method}-{date_hour_minute}")
+    run_dir = os.path.join(results_dir, f"fcn_{embed_method}-{date_hour_minute}")
     os.makedirs(run_dir, exist_ok = True)
 
     # Run setup
-    n_epochs = 5000
+    n_epochs = 1
     batch_size = 32
     max_batch = -1
     lr = 1e-5
     device = torch.device("cuda:0")
 
-    train_pkl_loader, test_pkl_loader, train_size, test_size, fcn_size = load_embedding_pkl(embedding_method, device)
+    # Load in train and test pickle
+    embedded_train_pkl = os.path.join(data_dir, f"{unique_or_duplicate}_mutation_{dataset_folder}_{'Kds' if 'binding' in dataset_folder else 'meanFs'}_train_{embed_method}_embedded_320.pkl")
+    train_dataset = EmbeddedDMSDataset(embedded_train_pkl, device)
+    embedded_test_pkl = os.path.join(data_dir, f"{unique_or_duplicate}_mutation_{dataset_folder}_{'Kds' if 'binding' in dataset_folder else 'meanFs'}_test_{embed_method}_embedded_320.pkl")
+    test_dataset = EmbeddedDMSDataset(embedded_test_pkl, device)
 
-    fcn_input_size = fcn_size      
-    fcn_hidden_size = fcn_size 
+    fcn_input_size = train_dataset.embeddings[0].size(1)   
+    fcn_hidden_size = fcn_input_size
     model = FCN(fcn_input_size, fcn_hidden_size, device)
 
     count_parameters(model)
-    model_result = os.path.join(run_dir, f"fcn{date_hour_minute}_train_{train_size}_test_{test_size}")
-    metrics  = run_fcn(model, train_pkl_loader, test_pkl_loader, n_epochs, batch_size, lr, max_batch, device, model_result)   
-    calc_train_test_history(metrics, train_size, test_size, embedding_method, model_result)   
-    
+    model_result = os.path.join(run_dir, f"fcn-{date_hour_minute}_train_{len(train_dataset)}_test_{len(test_dataset)}")
+    metrics  = run_model(model, train_dataset, test_dataset, n_epochs, batch_size, lr, max_batch, device, model_result)
+    calc_train_test_history(metrics, len(train_dataset), len(test_dataset), embed_method, dataset_folder, "fcn", str(lr), model_result)

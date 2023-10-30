@@ -1,21 +1,56 @@
+#!/usr/bin/env python
+""" 
+GraphSAGE model, utilizing the DMS binding or expression datasets.
+
+The aim is to utilize the binding affinity or expression value for a 
+sequence as the target value for the model to predict. The each sequence
+has an embedding representation, which is then used as a node feature
+in the graph that gets utilized by the GraphSAGE model. These node features
+are connected to each other by edges.
+"""
+
 import os
 import sys
 import tqdm
 import torch
+import pickle
 import datetime
-import numpy as np
-import seaborn as sns
-import pandas as pd
-import matplotlib.pyplot as plt
+from typing import Union
 from collections import defaultdict
 from torch import nn
-from torch_geometric.nn import SAGEConv
-from torch.utils.data import DataLoader, random_split
-from typing import Union
-from prettytable import PrettyTable
+from torch_geometric.nn import SAGEConv, global_mean_pool
+from torch_geometric.data import Data
+from torch_geometric.loader import DataLoader
+from torch.utils.data import Dataset
+from model_util import calc_train_test_history
 
-sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
-from data.load_dms import PKL_Loader
+class EmbeddedDMSDataset(Dataset):
+    """ Binding or Expression DMS Dataset """
+    
+    def __init__(self, pickle_file:str):
+        """
+        Load from pickle file:
+        - sequence label (seq_id), 
+        - binding or expression numerical target (log10Ka or ML_meanF), and 
+        - embeddings
+        """
+        with open(pickle_file, 'rb') as f:
+            dms_list = pickle.load(f)
+        
+            self.labels = [entry['seq_id'] for entry in dms_list]
+            self.numerical = [entry["log10Ka" if "binding" in pickle_file else "ML_meanF"] for entry in dms_list]
+            self.embeddings = [entry['embedding'] for entry in dms_list]
+ 
+    def __len__(self) -> int:
+        return len(self.labels)
+
+    def __getitem__(self, idx):
+        # Convert to pytorch geometric graph
+        edges = [(i, i+1) for i in range(self.embeddings[idx].size(0) - 1)]
+        edge_index = torch.tensor(edges, dtype=torch.int64).t().contiguous()
+        y = torch.tensor([self.numerical[idx]], dtype=torch.float32).view(-1, 1)
+        
+        return Data(x=self.embeddings[idx], edge_index=edge_index, y=y)
 
 class GraphSAGE(torch.nn.Module):
     def __init__(self, in_channels, out_channels):
@@ -23,12 +58,13 @@ class GraphSAGE(torch.nn.Module):
         self.conv1 = SAGEConv(in_channels, 16)
         self.conv2 = SAGEConv(16, out_channels)
 
-    def forward(self, x, edge_index):
+    def forward(self, x, edge_index, batch):
         x = self.conv1(x, edge_index).relu()
         x = self.conv2(x, edge_index)
+        x = global_mean_pool(x, batch)
         return x
 
-def run_graphsage(model, train_set, test_set, n_epochs: int, batch_size: int, lr:float, max_batch: Union[int, None], device: str, save_as: str):
+def run_graphsage(model, train_set, test_set, n_epochs: int, batch_size: int, lr:float, max_batch: Union[int, None], device: str):
     """ Run GraphSAGE model """
     
     if not max_batch:
@@ -55,8 +91,6 @@ def run_graphsage(model, train_set, test_set, n_epochs: int, batch_size: int, lr
               f'Epoch {epoch} | Train MSE: {train_loss:.4f}\n'
               f'{" "*(len(str(epoch))+8)} Test MSE: {test_loss:.4f}')
 
-        save_model(model, optimizer, epoch, save_as + '.model_save')
-
     return metrics
 
 def epoch_iteration(model, loss_fn, optimizer, data_loader, num_epochs: int, max_batch: int, device: str, mode: str):
@@ -70,114 +104,61 @@ def epoch_iteration(model, loss_fn, optimizer, data_loader, num_epochs: int, max
                           total=len(data_loader),
                           bar_format='{l_bar}{r_bar}')
 
-    for batch, batch_data in data_iter:
+    for batch, data in data_iter:
         if max_batch > 0 and batch >= max_batch:
             break 
-        
-        label, feature, edge_index, target = batch_data  # Assume edge_index is available
-        feature, edge_index, target = feature.to(device), edge_index.to(device), target.to(device) 
+
+        data = data.to(device)
 
         if mode == 'train':
             optimizer.zero_grad()
-            pred = model(feature, edge_index).flatten()
-            batch_loss = loss_fn(pred, target)
+            pred = model(data.x, data.edge_index, data.batch)
+            batch_loss = loss_fn(pred, data.y)
             loss += batch_loss.item()
             batch_loss.backward()
             optimizer.step()
 
         else:
             with torch.no_grad():
-                pred = model(feature, edge_index).flatten()
-                batch_loss = loss_fn(pred, target)
+                pred = model(data.x, data.edge_index, data.batch)
+                batch_loss = loss_fn(pred, data.y)
                 loss += batch_loss.item()
 
     return loss
 
-def save_model(model: GraphSAGE, optimizer: torch.optim.SGD, epoch: int, save_as: str):  
-    """
-    Save model parameters.
-
-    model: a BLSTM model object
-    optimizer: model optimizer
-    epoch: number of epochs in the end of the model running
-    save_as: file name for saveing the model.
-    """
-    torch.save({'epoch': epoch,
-                'model_state_dict': model.state_dict(),
-                'optimizer_state_dict': optimizer.state_dict()},
-                save_as)
-
-def count_parameters(model):
-    """
-    Count model parameters and print a summary
-
-    A nice hack from:
-    https://stackoverflow.com/a/62508086/1992369
-    """
-    table = PrettyTable(["Modules", "Parameters"])
-    total_params = 0
-    for name, parameter in model.named_parameters():
-        if not parameter.requires_grad: continue
-        params = parameter.numel()
-        table.add_row([name, params])
-        total_params+=params
-    print(table)
-    print(f"Total Trainable Params: {total_params}\n")
-    return total_params
-
-def load_embedding_pkl(embedding_method: str, device: str) -> tuple:
-    """
-    Load in embedding pkl based on embedding type, and set up the pkl loader.
-    Based on the embedding type, returns the 
-        - pkl loaders, 
-        - length of the loaders, and
-        - the dimension size needed for running the blstm model.
-    """
-    data_dir = os.path.join(os.path.dirname(__file__), '../data/dms')
-    
-    file_names = {"rbd_learned": ("mutation_binding_Kds_train_rbd_learned_embedded.pkl", 
-                                  "mutation_binding_Kds_test_rbd_learned_embedded.pkl", 
-                                  [201, 320]),
-                  "rbd_bert": ("mutation_binding_Kds_train_rbd_bert_embedded.pkl", 
-                               "mutation_binding_Kds_test_rbd_bert_embedded.pkl", 
-                               [201, 320]),
-                  "esm": ("mutation_binding_Kds_train_esm_embedded.pkl", 
-                          "mutation_binding_Kds_test_esm_embedded.pkl", 
-                          [203, 320])}
-    
-    data_files = file_names.get(embedding_method.lower())
-    if not data_files:
-        raise ValueError("Invalid embedding type. Choose from 'rbd_learned', 'rbd_bert', 'esm', or 'one_hot'.")
-    
-    train_file, test_file, input_shape = data_files
-    embedded_train_pkl = os.path.join(data_dir, train_file)
-    embedded_test_pkl = os.path.join(data_dir, test_file)
-    
-    train_pkl_loader = PKL_Loader(embedded_train_pkl, device) 
-    test_pkl_loader = PKL_Loader(embedded_test_pkl, device)    
-    
-    return train_pkl_loader, test_pkl_loader, len(train_pkl_loader), len(test_pkl_loader), input_shape[1]
-
 if __name__=='__main__':
 
-    results_dir = os.path.join(os.path.dirname(__file__), '../results/blstm')
-    embedding_method = "rbd_learned"
+    dataset_folder = "expression" # specify
+    embed_method = "rbd_learned" # specify
+    dimension = "320"
+    unique_or_duplicate = "unique" # specify
 
+    # Data/results directoriesdata_dir = os.path.join(os.path.dirname(__file__), f'../data/dms/{dataset_folder}/{unique_or_duplicate}')
+    results_dir = os.path.join(os.path.dirname(__file__), f'../results/graphsage/dms/{dataset_folder}/{unique_or_duplicate}')
+    
+    # Create run directory for results
     now = datetime.datetime.now()
     date_hour_minute = now.strftime("%Y-%m-%d_%H-%M")
-    run_dir = os.path.join(results_dir, f"blstm_{embedding_method}-{date_hour_minute}")
+    run_dir = os.path.join(results_dir, f"graphsage_{embed_method}-{date_hour_minute}")
     os.makedirs(run_dir, exist_ok = True)
 
     # Run setup
-    n_epochs = 10
+    n_epochs = 2500
     batch_size = 32
-    max_batch = 10
+    max_batch = -1
     lr = 1e-5
-    device = "cuda:0"
+    device = torch.device("cuda:0")
 
-    train_pkl_loader, test_pkl_loader, train_size, test_size, input_channels = load_embedding_pkl(embedding_method, device)
-   
+    # Load in train and test pickle
+    embedded_train_pkl = os.path.join(data_dir, f"{unique_or_duplicate}_mutation_{dataset_folder}_{'Kds' if 'binding' in dataset_folder else 'meanFs'}_train_{embed_method}_embedded{f'_{dimension}'}.pkl")
+    train_dataset = EmbeddedDMSDataset(embedded_train_pkl)
+    embedded_test_pkl = os.path.join(data_dir, f"{unique_or_duplicate}_mutation_{dataset_folder}_{'Kds' if 'binding' in dataset_folder else 'meanFs'}_test_{embed_method}_embedded{f'_{dimension}'}.pkl")
+    test_dataset = EmbeddedDMSDataset(embedded_test_pkl)
+
+    input_channels = train_dataset.embeddings[0].size(1) # number of input channels (dimensions of the embeddings)
     out_channels = 1  # For regression output
     model = GraphSAGE(input_channels, out_channels).to(device)
 
-    run_graphsage(model, train_pkl_loader, test_pkl_loader, n_epochs, batch_size, lr, max_batch, device)
+    model_result = os.path.join(run_dir, f"graphsage-{date_hour_minute}_train_{len(train_dataset)}_test_{len(test_dataset)}")
+    metrics = run_graphsage(model, train_dataset, test_dataset, n_epochs, batch_size, lr, max_batch, device)
+    calc_train_test_history(metrics, len(train_dataset), len(test_dataset), embed_method, dataset_folder, "graphsage", str(lr), model_result)
