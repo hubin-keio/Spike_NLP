@@ -266,8 +266,8 @@ if __name__=="__main__":
     results_dir = os.path.join(data_dir, '../results')
     
     # DMS data file
-    dms_train_csv = os.path.join(data_dir, 'dms/expression/duplicate/duplicate_mutation_expression_meanFs_train.csv') # expression data
-    dms_test_csv = os.path.join(data_dir, 'dms/expression/duplicate/duplicate_mutation_expression_meanFs_test.csv')
+    dms_train_csv = os.path.join(data_dir, 'dms/expression/mutation_expression_meanFs_train.csv') # expression data
+    dms_test_csv = os.path.join(data_dir, 'dms/expression/mutation_expression_meanFs_test.csv')
 
     # Load pretrained spike model to embedder
     # model_pth = os.path.join(results_dir, 'ddp_runner/ddp-2023-08-16_08-41/ddp-2023-08-16_08-41_best_model_weights.pth') # 768 dim

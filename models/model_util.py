@@ -64,9 +64,6 @@ def plot_from_csv(csv_file:str, embedding_method:str, dataset:str, model:str, lr
     plot_rmse_history(embedding_method, dataset, model, lr, history_df, save_as)
     plot_history(embedding_method, dataset, model, lr, history_df, save_as)
 
-# def plot_duplicate_rmse_stats():
-#     # TODO
-
 def plot_rmse_history(embedding_method: str, dataset:str, model:str, lr:str, history_df, save_as: str):
     """ Plot RMSE training and testing history per epoch. """
     

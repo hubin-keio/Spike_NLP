@@ -63,25 +63,6 @@ def split_csv(rnd_seed: int, input_csv: str):
 
     print(f'Total: {len(input_records)}, Train: {len(train_records)}, Test: {len(test_records)}')
 
-def sample_meta_csv(rnd_seed:int, train_csv_file: str, test_csv_file: str):
-    """
-    Randomly sample even parts of a fraction of the original data csv.
-    Using this for the metadata to sample among variants.
-    """
-
-    train_df = pd.read_csv(train_csv_file, sep=',', header=0)
-    test_df = pd.read_csv(test_csv_file, sep=',', header=0)
-    combined_df = pd.concat([train_df, test_df], ignore_index=True)
-    count_sequences_per_variant(combined_df)
-
-    filtered_df = combined_df[combined_df['variant'].isin(["Alpha", "Delta", "Omicron"])]
-    sampled_df = pd.concat([filtered_df[filtered_df['variant'] == variant].sample(n=400, random_state=rnd_seed)
-                            for variant in ["Alpha", "Delta", "Omicron"]]) # 400 of each
-
-    save_as = train_csv_file.replace("_train_variant_seq.csv", f"_variant_seq_sampled_ADO_1200.csv")
-    sampled_df.to_csv(save_as, index=False)
-    count_sequences_per_variant(sampled_df)
-
 def count_sequences_per_variant(input_df):
     """Count the number of sequences per variant and print the result."""
     
@@ -94,11 +75,6 @@ if __name__ == '__main__':
     data_dir = os.path.dirname(__file__)
     rnd_seed = 0
     
-    # RBD w/ metadata variants (sampling)
-    # train_csv_file = os.path.join(data_dir, "spike_variants/rbd_train_variant_seq.csv")
-    # test_csv_file = os.path.join(data_dir, "spike_variants/rbd_test_variant_seq.csv")
-    # sample_meta_csv(rnd_seed, train_csv_file, test_csv_file)
-
     # RBD w/ metadata variants
     # (new split, old data may no longer retain 80/20 split after removal of entries w/ no variant label)
     train_csv_file = os.path.join(data_dir, "spike_variants/rbd_train_variant_seq.csv")
