@@ -1,7 +1,11 @@
 #!/usr/bin/env python
 """
 Model runner for bert_blstm.py
-TODO: Have not made any changes to this, not updated for bert_blstm.py yet
+
+TODO: 
+- add blstm and bert_blstm to pnlp package and 
+- move model.util and the bert_blstm model runner to runner folder
+- test unit for each part
 """
 
 import os
@@ -15,7 +19,12 @@ from collections import defaultdict
 from torch import nn
 from torch.utils.data import Dataset, DataLoader
 from model_util import save_model, count_parameters, calc_train_test_history
-from bert_blstm import BERT_BLSTM
+from pnlp.embedding.tokenizer import token_to_index
+from pnlp.model.language import BERT
+
+sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
+from model.blstm import BLSTM
+from model.bert_blstm import BERT_BLSTM
 
 class EmbeddedDMSDataset(Dataset):
     """ Binding or Expression DMS Dataset """
@@ -41,7 +50,7 @@ class EmbeddedDMSDataset(Dataset):
 
     def __getitem__(self, idx):
         # label, feature, target
-        return self.labels[idx], self.embeddings[idx].to(self.device), self.numerical[idx]
+        return self.labels[idx], self.embeddings[idx].long(), self.numerical[idx]
 
 def run_model(model, train_set, test_set, n_epochs: int, batch_size: int, lr:float, max_batch: Union[int, None], device: str, save_as: str):
     """ Run a model through train and test epochs"""
@@ -50,20 +59,19 @@ def run_model(model, train_set, test_set, n_epochs: int, batch_size: int, lr:flo
         max_batch = len(train_set)
 
     model = model.to(device)
-    blstm_loss_fn = nn.MSELoss(reduction='sum').to(device)
-    bert_loss = torch.nn.CrossEntropyLoss(reduction='sum').to(device)
+    regression_loss_fn = nn.MSELoss(reduction='sum').to(device) # blstm
+    masked_language_loss_fn = nn.CrossEntropyLoss(reduction='sum').to(device) # mlm
     
     optimizer = torch.optim.SGD(model.parameters(), lr)
 
     train_loader = DataLoader(train_set, batch_size, shuffle=True)
     test_loader = DataLoader(test_set, batch_size, shuffle=True)
 
-    
     metrics = defaultdict(list)
 
     for epoch in range(1, n_epochs + 1):
-        train_loss = epoch_iteration(model, loss_fn, optimizer, train_loader, epoch, max_batch, device, mode='train')
-        test_loss = epoch_iteration(model, loss_fn, optimizer, test_loader, epoch, max_batch, device, mode='test')
+        train_loss = epoch_iteration(model, regression_loss_fn, masked_language_loss_fn, optimizer, train_loader, epoch, max_batch, device, mode='train')
+        test_loss = epoch_iteration(model, regression_loss_fn, masked_language_loss_fn, optimizer, test_loader, epoch, max_batch, device, mode='test')
 
         keys = ['train_loss','test_loss'] # to add more metrics, add more keys
         for key in keys:
@@ -77,7 +85,7 @@ def run_model(model, train_set, test_set, n_epochs: int, batch_size: int, lr:flo
 
     return metrics
 
-def epoch_iteration(model, loss_fn, optimizer, data_loader, num_epochs: int, max_batch: int, device: str, mode: str):
+def epoch_iteration(model, regression_loss_fn, masked_language_loss_fn, optimizer, data_loader, num_epochs: int, max_batch: int, device: str, mode: str):
     """ Used in run_model """
     
     model.train() if mode=='train' else model.eval()
@@ -98,9 +106,17 @@ def epoch_iteration(model, loss_fn, optimizer, data_loader, num_epochs: int, max
 
         if mode == 'train':
             optimizer.zero_grad()
+            print(feature.shape)
             pred = model(feature).flatten()
-            batch_loss = loss_fn(pred, target)
-            loss += batch_loss.item()
+            
+
+            exit()
+            # is this right??
+            blstm_loss = regression_loss_fn(pred, target)
+            mlm_loss = masked_language_loss_fn(pred, target)
+
+            # batch_loss = loss_fn(pred, target)
+            # loss += batch_loss.item()
             batch_loss.backward()
             optimizer.step()
 
@@ -115,11 +131,11 @@ def epoch_iteration(model, loss_fn, optimizer, data_loader, num_epochs: int, max
 if __name__=='__main__':
 
     dataset_folder = "expression" # specify
-    embed_method = "rbd_learned" # specify
+    embed_method = "rbd_bert" # specify
 
     # Data/results directories
-    data_dir = os.path.join(os.path.dirname(__file__), f'../data/dms/{dataset_folder}')
-    results_dir = os.path.join(os.path.dirname(__file__), f'../results/bert_blstm/dms/{dataset_folder}')
+    data_dir = os.path.join(os.path.dirname(__file__), f'../../../data/dms/{dataset_folder}')
+    results_dir = os.path.join(os.path.dirname(__file__), f'../../../results/bert_blstm/dms/{dataset_folder}')
     
     # Create run directory for results
     now = datetime.datetime.now()
@@ -140,14 +156,31 @@ if __name__=='__main__':
     embedded_test_pkl = os.path.join(data_dir, f"mutation_{dataset_folder}_{'Kds' if 'binding' in dataset_folder else 'meanFs'}_test_{embed_method}_embedded_320.pkl")
     test_dataset = EmbeddedDMSDataset(embedded_test_pkl, device)
 
-    lstm_input_size = train_dataset.embeddings[0].size(1)      
-    lstm_hidden_size = lstm_input_size   
+    # BERT input
+    max_len = 280
+    mask_prob = 0.15
+    embedding_dim = 320 
+    dropout = 0.1
+    n_transformer_layers = 12
+    n_attn_heads = 10
+    bert = BERT(embedding_dim, dropout, max_len, mask_prob, n_transformer_layers, n_attn_heads)
+
+    # BLSTM input
+    lstm_input_size = 320
+    lstm_hidden_size = 320
     lstm_num_layers = 1        
     lstm_bidrectional = True   
-    fcn_hidden_size = lstm_input_size
-    model = BERT_BLSTM(batch_size, lstm_input_size, lstm_hidden_size, lstm_num_layers, lstm_bidrectional, fcn_hidden_size, device)
+    fcn_hidden_size = 320
+    blstm = BLSTM(batch_size, lstm_input_size, lstm_hidden_size, lstm_num_layers, lstm_bidrectional, fcn_hidden_size, device)
 
-    count_parameters(model)
+    alpha = 1
+    vocab_size = len(token_to_index)
+
+    model = BERT_BLSTM(bert, blstm, vocab_size, alpha)
+
+    #count_parameters(model)
     model_result = os.path.join(run_dir, f"bert_blstm-{date_hour_minute}_train_{len(train_dataset)}_test_{len(test_dataset)}")
     metrics  = run_model(model, train_dataset, test_dataset, n_epochs, batch_size, lr, max_batch, device, model_result)
     calc_train_test_history(metrics, len(train_dataset), len(test_dataset), embed_method, dataset_folder, "bert_blstm", str(lr), model_result)
+
+

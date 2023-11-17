@@ -14,7 +14,9 @@ from collections import defaultdict
 from torch import nn
 from torch.utils.data import Dataset, DataLoader
 from model_util import save_model, count_parameters, calc_train_test_history
-from blstm import BLSTM
+
+sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
+from model.blstm import BLSTM
 
 class EmbeddedDMSDataset(Dataset):
     """ Binding or Expression DMS Dataset """
@@ -89,8 +91,12 @@ def epoch_iteration(model, loss_fn, optimizer, data_loader, num_epochs: int, max
             break 
         
         label, feature, target = batch_data
+        print(target)
+        
         feature, target = feature.to(device), target.to(device) 
         target = target.float()
+        print(target)
+        exit()
 
         if mode == 'train':
             optimizer.zero_grad()
@@ -114,8 +120,8 @@ if __name__=='__main__':
     embed_method = "rbd_learned" # specify
 
     # Data/results directories
-    data_dir = os.path.join(os.path.dirname(__file__), f'../data/dms/{dataset_folder}')
-    results_dir = os.path.join(os.path.dirname(__file__), f'../results/blstm/dms/{dataset_folder}')
+    data_dir = os.path.join(os.path.dirname(__file__), f'../../../data/dms/{dataset_folder}')
+    results_dir = os.path.join(os.path.dirname(__file__), f'../../../results/blstm/dms/{dataset_folder}')
     
     # Create run directory for results
     now = datetime.datetime.now()
@@ -141,7 +147,7 @@ if __name__=='__main__':
     lstm_num_layers = 1        
     lstm_bidrectional = True   
     fcn_hidden_size = lstm_input_size
-    model = BLSTM(batch_size, lstm_input_size, lstm_hidden_size, lstm_num_layers, lstm_bidrectional, fcn_hidden_size, device)
+    model = BLSTM(lstm_input_size, lstm_hidden_size, lstm_num_layers, lstm_bidrectional, fcn_hidden_size)
 
     count_parameters(model)
     model_result = os.path.join(run_dir, f"blstm-{date_hour_minute}_train_{len(train_dataset)}_test_{len(test_dataset)}")

@@ -1,1 +1,5 @@
 /logs
+/spike_variants/older_pkls
+/spike_variants/spikeprot0528.clean.uniq.noX.RBD_variants_clustering_esm_blstm.pkl
+/spike_variants/spikeprot0528.clean.uniq.noX.RBD_variants_clustering_esm_blstm_tsne.png
+/spike_variants/spikeprot0528.clean.uniq.noX.RBD_variants_clustering_esm_blstm_umap.png

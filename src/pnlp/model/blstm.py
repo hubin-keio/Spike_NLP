@@ -1,7 +1,5 @@
-#!/usr/bin/env python
-"""
-BLSTM model with FCN layer, utilizing the DMS binding or expression datasets.
-"""
+""" BLSTM model with FCN layer. """
+
 import torch
 from torch import nn
 
@@ -9,16 +7,12 @@ class BLSTM(nn.Module):
     """ Bidirectional LSTM """
 
     def __init__(self,
-                 batch_size,         # Batch size of the tensor
                  lstm_input_size,    # The number of expected features.
                  lstm_hidden_size,   # The number of features in hidden state h.
                  lstm_num_layers,    # Number of recurrent layers in LSTM.
                  lstm_bidirectional, # Bidrectional LSTM.
-                 fcn_hidden_size,    # The number of features in hidden layer of CN.
-                 device):            # Device ('cpu' or 'cuda')
+                 fcn_hidden_size):    # The number of features in hidden layer of CN.
         super().__init__()
-        self.batch_size = batch_size
-        self.device = device
 
         # LSTM layer
         self.lstm = nn.LSTM(input_size=lstm_input_size,
@@ -40,15 +34,14 @@ class BLSTM(nn.Module):
 
     def forward(self, x):
         num_directions = 2 if self.lstm.bidirectional else 1
-        h_0 = torch.zeros(num_directions * self.lstm.num_layers, x.size(0), self.lstm.hidden_size).to(self.device)
-        c_0 = torch.zeros(num_directions * self.lstm.num_layers, x.size(0), self.lstm.hidden_size).to(self.device)
+        h_0 = torch.zeros(num_directions * self.lstm.num_layers, x.size(0), self.lstm.hidden_size, device=x.device)
+        c_0 = torch.zeros(num_directions * self.lstm.num_layers, x.size(0), self.lstm.hidden_size, device=x.device)
 
         lstm_out, (h_n, c_n) = self.lstm(x, (h_0, c_0))
         h_n.detach()
         c_n.detach()
         lstm_final_out = lstm_out[:, -1, :]
-        lstm_final_state = lstm_final_out.to(self.device)
-        fcn_out = self.fcn(lstm_final_state)
+        fcn_out = self.fcn(lstm_final_out)
         prediction = self.out(fcn_out)
 
         return prediction

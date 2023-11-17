@@ -176,7 +176,7 @@ def plot_umap(save_as, embedding_matrix, all_variants, variant_labels, all_seq_i
     umap_df.to_csv(umap_csv_save_as, index=False)
     
     # Color mapping based on variant label
-    cmap = sns.color_palette("tab20", len(variant_labels))
+    cmap = sns.color_palette("spectral", len(variant_labels))
     variant_colors = {variant: cmap[i] for i, variant in enumerate(variant_labels)}
     colors = [variant_colors[variant] for variant in all_variants]
 
@@ -266,26 +266,26 @@ if __name__=="__main__":
     all_data = extract_embedding_pickle(pickle_file)
     logging.info(f"Post embedding extraction memory usage: {memory_usage()}")
 
-    # Whole dataset maps
-    ado = True
-    whole = True
-    save_as, embedding_matrix, variants, variant_labels, seq_ids = sample_embedding_pickle(run_dir, all_data, whole, ado, "whole")
+    # # Whole dataset maps
+    # ado = True
+    # whole = True
+    # save_as, embedding_matrix, variants, variant_labels, seq_ids = sample_embedding_pickle(run_dir, all_data, whole, ado, "whole")
 
-    print(f"Plotting 2D UMAP - All")
-    logging.info(f"Pre 2D UMAP memory usage: {memory_usage()}")
-    plot_umap(save_as, embedding_matrix, variants, variant_labels, seq_ids, 0) # can also set rnd_seed here
-    #plot_umap_with_circle(save_as, embedding_matrix, variants, variant_labels, 0) # can also set rnd_seed here
-    logging.info(f"2D UMAP memory usage: {memory_usage()}")
+    # print(f"Plotting 2D UMAP - All")
+    # logging.info(f"Pre 2D UMAP memory usage: {memory_usage()}")
+    # plot_umap(save_as, embedding_matrix, variants, variant_labels, seq_ids, 0) # can also set rnd_seed here
+    # #plot_umap_with_circle(save_as, embedding_matrix, variants, variant_labels, 0) # can also set rnd_seed here
+    # logging.info(f"2D UMAP memory usage: {memory_usage()}")
 
-    print(f"Plotting T-SNE - All")
-    logging.info(f"Pre T-SNE memory usage: {memory_usage()}")
-    plot_tsne(save_as, embedding_matrix, variants, variant_labels, 0) # can also set rnd_seed here
-    logging.info(f"Post T-SNE memory usage: {memory_usage()}")
+    # print(f"Plotting T-SNE - All")
+    # logging.info(f"Pre T-SNE memory usage: {memory_usage()}")
+    # plot_tsne(save_as, embedding_matrix, variants, variant_labels, 0) # can also set rnd_seed here
+    # logging.info(f"Post T-SNE memory usage: {memory_usage()}")
 
     # Iteration maps
     ado = True
     whole = False
-    iterations = 12
+    iterations = 1
 
     for i in range(iterations):
         rnd_seed = i  # Change the seed for each iteration to ensure different samples
@@ -296,14 +296,14 @@ if __name__=="__main__":
         plot_umap(save_as, embedding_matrix, variants, variant_labels, seq_ids, 0) # can also set rnd_seed here
         logging.info(f"2D UMAP memory usage: {memory_usage()}")
 
-        print(f"Plotting T-SNE - Iteration {i}")
-        logging.info(f"Pre T-SNE memory usage: {memory_usage()}")
-        plot_tsne(save_as, embedding_matrix, variants, variant_labels, 0) # can also set rnd_seed here
-        logging.info(f"Post T-SNE memory usage: {memory_usage()}")
+    #     print(f"Plotting T-SNE - Iteration {i}")
+    #     logging.info(f"Pre T-SNE memory usage: {memory_usage()}")
+    #     plot_tsne(save_as, embedding_matrix, variants, variant_labels, 0) # can also set rnd_seed here
+    #     logging.info(f"Post T-SNE memory usage: {memory_usage()}")
     
-    # Plotting plots together
-    umap_list = [os.path.join(run_dir, f"RBD_variants_clustering_esm_blstm{i}_a22073_d21887_o22399_umap.png") for i in range(iterations)]
-    plot_together(os.path.join(run_dir,"RBD_variant_clustering_umap_combined.png"), umap_list)
+    # # Plotting plots together
+    # umap_list = [os.path.join(run_dir, f"RBD_variants_clustering_esm_blstm{i}_a22073_d21887_o22399_umap.png") for i in range(iterations)]
+    # plot_together(os.path.join(run_dir,"RBD_variant_clustering_umap_combined.png"), umap_list)
 
-    tsne_list = [os.path.join(run_dir, f"RBD_variants_clustering_esm_blstm{i}_a22073_d21887_o22399_tsne.png") for i in range(iterations)]
-    plot_together(os.path.join(run_dir,"RBD_variant_clustering_tsne_combined.png"), tsne_list)
+    # tsne_list = [os.path.join(run_dir, f"RBD_variants_clustering_esm_blstm{i}_a22073_d21887_o22399_tsne.png") for i in range(iterations)]
+    # plot_together(os.path.join(run_dir,"RBD_variant_clustering_tsne_combined.png"), tsne_list)
