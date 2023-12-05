@@ -295,7 +295,9 @@ if __name__ == '__main__':
 
     # Sequence length dist plotting on full variant csv, no test/train split
     full_csv =  os.path.join(data_dir, "spike_variants/spikeprot0528.clean.uniq.noX.RBD_variants.csv")
-    plot_seq_length_distibution(full_csv)
+    plot_variant_distribution(results_dir)
+    plot_aa_distribution(results_dir)
+    # plot_seq_length_distibution(full_csv)
 
     # BELOW: code that runs the description above, sequence length dist is separate
     # # Data loader
