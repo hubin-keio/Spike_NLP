@@ -24,6 +24,7 @@ from collections import defaultdict
 from torch import nn
 from torch.utils.data import Dataset, DataLoader
 from model_util import save_model, count_parameters
+from transformers import AutoTokenizer, EsmModel 
 from pnlp.embedding.tokenizer import ProteinTokenizer, token_to_index
 from pnlp.model.language import BERT
 
@@ -55,7 +56,15 @@ class DMSDataset(Dataset):
         # label, seq, target
         return self.full_df['labels'][idx], self.full_df['sequence'][idx], self.full_df[self.target][idx]
 
-def run_model(model, tokenizer, train_set, test_set, n_epochs: int, batch_size: int, max_batch: Union[int, None], alpha:float, lr:float, device: str, save_as: str):
+def generate_esm_embeddings(batch_sequences, esm, esm_tokenizer, device):
+    tokenized_batch = esm_tokenizer(batch_sequences, padding=True, truncation=True, return_tensors='pt').to(device)
+    with torch.no_grad():
+        outputs = esm(**tokenized_batch)
+        embeddings = outputs.last_hidden_state
+    # embeddings shape: (batch_size, seq_len, embedding_dim)
+    return embeddings  
+
+def run_model(model, tokenizer, esm, esm_tokenizer, train_set, test_set, n_epochs: int, batch_size: int, max_batch: Union[int, None], alpha:float, lr:float, device: str, save_as: str):
     """ Run a model through train and test epochs"""
     
     if not max_batch:
@@ -72,8 +81,8 @@ def run_model(model, tokenizer, train_set, test_set, n_epochs: int, batch_size: 
     metrics = defaultdict(list)
 
     for epoch in range(1, n_epochs + 1):
-        train_mlm_accuracy, train_mlm_loss, train_blstm_loss, train_combined_loss = epoch_iteration(model, tokenizer, regression_loss_fn, masked_language_loss_fn, optimizer, train_loader, epoch, max_batch, alpha, device, mode='train')
-        test_mlm_accuracy, test_mlm_loss, test_blstm_loss, test_combined_loss = epoch_iteration(model, tokenizer, regression_loss_fn, masked_language_loss_fn, optimizer, test_loader, epoch, max_batch, alpha, device, mode='test')
+        train_mlm_accuracy, train_mlm_loss, train_blstm_loss, train_combined_loss = epoch_iteration(model, tokenizer, esm, esm_tokenizer, regression_loss_fn, masked_language_loss_fn, optimizer, train_loader, epoch, max_batch, alpha, device, mode='train')
+        test_mlm_accuracy, test_mlm_loss, test_blstm_loss, test_combined_loss = epoch_iteration(model, tokenizer, esm, esm_tokenizer, regression_loss_fn, masked_language_loss_fn, optimizer, test_loader, epoch, max_batch, alpha, device, mode='test')
 
         keys = ['epoch',
                 'train_mlm_accuracy', 'test_mlm_accuracy',
@@ -92,7 +101,7 @@ def run_model(model, tokenizer, train_set, test_set, n_epochs: int, batch_size: 
 
     return metrics
 
-def epoch_iteration(model, tokenizer, regression_loss_fn, masked_language_loss_fn, optimizer, data_loader, num_epochs: int, max_batch: int, alpha:float, device: str, mode: str):
+def epoch_iteration(model, tokenizer, esm, esm_tokenizer, regression_loss_fn, masked_language_loss_fn, optimizer, data_loader, num_epochs: int, max_batch: int, alpha:float, device: str, mode: str):
     """ Used in run_model """
     
     model.train() if mode=='train' else model.eval()
@@ -114,6 +123,9 @@ def epoch_iteration(model, tokenizer, regression_loss_fn, masked_language_loss_f
 
         labels, seqs, targets = batch_data
         masked_tokenized_seqs = tokenizer(seqs).to(device)
+
+        print(masked_tokenized_seqs)
+
         unmasked_tokenized_seqs = tokenizer._batch_pad(seqs).to(device)
         target = targets.to(device).float()
 
@@ -229,8 +241,8 @@ def plot_rmse_history(history_df, save_as: str):
     ax.set(xlabel='Epoch', ylabel='Average RMSE per sample')
     plt.style.use('ggplot')
     plt.tight_layout()
-    plt.savefig(save_as + '_rmse.pdf', format='pdf')
- 
+    plt.savefig(save_as + '_rmse.pdf', format='pdf') 
+
 if __name__=='__main__':
 
     # Data/results directories
@@ -250,15 +262,30 @@ if __name__=='__main__':
     train_dataset = DMSDataset(dms_train_csv)
     test_dataset = DMSDataset(dms_test_csv)
 
-    # Load pretrained spike model weights for BERT
-    model_pth = os.path.join(results_dir, 'ddp_runner/ddp-2023-10-06_20-16/ddp-2023-10-06_20-16_best_model_weights.pth') # 320 dim
-    saved_state = torch.load(model_pth, map_location='cuda')
-    state_dict = saved_state['model_state_dict']
+    # ESM input
+    esm = EsmModel.from_pretrained("facebook/esm2_t6_8M_UR50D")
+
+    esm_embeddings = esm.embeddings.word_embeddings.weight
+    amino_acid = 'A'
+    esm_tokenizer = AutoTokenizer.from_pretrained("facebook/esm2_t33_650M_UR50D")
+    token_id = esm_tokenizer.convert_tokens_to_ids(amino_acid)
+    amino_acid_embedding = esm_embeddings[token_id]
+    print(amino_acid_embedding.shape)
+
+    exit()
+
+    # # Load pretrained spike model weights for BERT
+    # model_pth = os.path.join(results_dir, 'ddp_runner/ddp-2023-10-06_20-16/ddp-2023-10-06_20-16_best_model_weights.pth') # 320 dim
+    # saved_state = torch.load(model_pth, map_location='cuda')
+    # state_dict = saved_state['model_state_dict']
 
     # For loading from ddp models, they have 'module.bert.' or 'module.mlm.' in keys of state_dict
     # Also need separated out for each corresponding model part
-    bert_state_dict = {key[len('module.bert.'):]: value for key, value in state_dict.items() if key.startswith('module.bert.')}
-    mlm_state_dict = {key[len('module.mlm.'):]: value for key, value in state_dict.items() if key.startswith('module.mlm.')}
+    # bert_state_dict = {key[len('module.bert.'):]: value for key, value in state_dict.items() if key.startswith('module.bert.')}
+    # print(bert_state_dict)
+    
+    # exit()
+    # mlm_state_dict = {key[len('module.mlm.'):]: value for key, value in state_dict.items() if key.startswith('module.mlm.')}
 
     # BERT input
     max_len = 280
@@ -269,7 +296,7 @@ if __name__=='__main__':
     n_attn_heads = 10
     tokenizer = ProteinTokenizer(max_len, mask_prob)
     bert = BERT(embedding_dim, dropout, max_len, mask_prob, n_transformer_layers, n_attn_heads)
-    bert.load_state_dict(bert_state_dict)
+    #bert.load_state_dict(bert_state_dict)
 
     # BLSTM input
     lstm_input_size = 320
@@ -282,17 +309,17 @@ if __name__=='__main__':
     # BERT_BLSTM input
     vocab_size = len(token_to_index)
     model = BERT_BLSTM(bert, blstm, vocab_size)
-    model.mlm.load_state_dict(mlm_state_dict)
+    #model.mlm.load_state_dict(mlm_state_dict)
 
     # Run setup
-    n_epochs = 5000
+    n_epochs = 1
     batch_size = 32
-    max_batch = -1
+    max_batch = 1
     alpha = 1
     lr = 1e-5
-    device = torch.device("cuda:1")
+    device = torch.device("cuda:2")
 
     #count_parameters(model)
     model_result = os.path.join(run_dir, f"bert_blstm-{date_hour_minute}_train_{len(train_dataset)}_test_{len(test_dataset)}")
-    metrics  = run_model(model, tokenizer, train_dataset, test_dataset, n_epochs, batch_size, max_batch, alpha, lr, device, model_result)
+    metrics  = run_model(model, tokenizer, esm, esm_tokenizer, train_dataset, test_dataset, n_epochs, batch_size, max_batch, alpha, lr, device, model_result)
     calc_train_test_history(metrics, len(train_dataset), len(test_dataset), model_result)
