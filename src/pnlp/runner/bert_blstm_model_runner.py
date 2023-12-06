@@ -30,6 +30,7 @@ from pnlp.model.language import BERT
 sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 from model.blstm import BLSTM
 from model.bert_blstm import BERT_BLSTM
+from plots.plot_bert_blstm import plot_rmse_history, plot_mlm_history, plot_combined_history # may need fixing!
 
 class DMSDataset(Dataset):
     """ Binding or Expression DMS Dataset, not from pickle! """
@@ -162,74 +163,6 @@ def calc_train_test_history(metrics: dict, n_train: int, n_test: int, save_as: s
     plot_mlm_history(history_df, save_as)
     plot_rmse_history(history_df, save_as)
     plot_combined_history(history_df, save_as)
-
-def plot_combined_history(history_df: str, save_as):
-    '''
-    Generate a single figure with subplots for combined training loss
-    from the model run csv file.
-    '''
-    fig, ax1 = plt.subplots(nrows=1, ncols=1, figsize=(8, 5))
-
-    # Plot Training Loss
-    train_loss_line = ax1.plot(history_df['epoch'], history_df['train_combined_loss'], color='orange', label='Train Loss')
-    test_loss_line = ax1.plot(history_df['epoch'], history_df['test_combined_loss'],color='blue', label='Test Loss')
-    ax1.set_ylabel('Loss')
-    ax1.set_xlabel('Epoch')
-    ax1.legend(loc='upper right')
-
-    plt.style.use('ggplot')
-    plt.tight_layout()
-    plt.savefig(save_as+'_combined_loss.pdf', format='pdf')
-
-def plot_mlm_history(history_df: str, save_as):
-    '''
-    Generate a single figure with subplots for training loss and training accuracy
-    from the model run csv file.
-    '''
-    fig, (ax1, ax2) = plt.subplots(nrows=2, ncols=1, figsize=(8, 10))
-
-    # Plot Training Loss
-    train_loss_line = ax1.plot(history_df['epoch'], history_df['train_mlm_loss'], color='red', label='Train Loss')
-    test_loss_line = ax1.plot(history_df['epoch'], history_df['test_mlm_loss'],color='orange', label='Test Loss')
-    ax1.set_ylabel('Loss')
-    ax1.legend(loc='upper right')
-
-    # Plot Training Accuracy
-    train_accuracy_line = ax2.plot(history_df['epoch'], history_df['train_mlm_accuracy'], color='blue', label='Train Accuracy')
-    test_accuracy_line = ax2.plot(history_df['epoch'], history_df['test_mlm_accuracy'], color='green', label='Test Accuracy')
-    ax2.set_xlabel('Epoch')
-    ax2.set_ylabel('Accuracy')
-    ax2.set_ylim(0, 1) 
-    ax2.legend(loc='upper right')
-
-    plt.style.use('ggplot')
-    plt.tight_layout()
-    plt.savefig(save_as+'_loss_acc.pdf', format='pdf')
-
-def plot_rmse_history(history_df, save_as: str):
-    """ Plot RMSE training and testing history per epoch. """
-    
-    sns.set_theme()
-    sns.set_context('talk')
-    palette = sns.color_palette()
-    plt.ion()
-    fig, ax = plt.subplots(figsize=(8, 5))
-
-    sns.lineplot(data=history_df, x=history_df.index, y='test_blstm_rmse_per', label='Test', color=palette[0], ax=ax)
-    sns.lineplot(data=history_df, x=history_df.index, y='train_blstm_rmse_per', label='Train', color=palette[1], ax=ax)
-    
-    # Skipping every other x-axis tick mark
-    xticks = ax.get_xticks()
-    ax.set_xticks(xticks[::2])  # Keep every other tick
-
-    # Skipping every other y-axis tick mark
-    yticks = ax.get_yticks()
-    ax.set_yticks(yticks[::2])  # Keep every other tick
-    
-    ax.set(xlabel='Epoch', ylabel='Average RMSE per sample')
-    plt.style.use('ggplot')
-    plt.tight_layout()
-    plt.savefig(save_as + '_rmse.pdf', format='pdf')
  
 if __name__=='__main__':
 

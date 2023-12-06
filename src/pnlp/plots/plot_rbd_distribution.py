@@ -14,7 +14,12 @@ def plot_variant_distribution(csv_file:str, save_as:str):
     variant_percentages = [(df['variant'] == variant).mean() * 100 for variant in all_variants]
 
     # Create a bar plot to visualize the distribution
+    sns.set_theme()
+    sns.set_context('talk')
+    sns.set(style='white')
     plt.figure(figsize=(14, 8))
+    plt.ion()
+
     bar_width= 0.45
     x = np.arange(len(all_variants))
     bars = plt.bar(x, variant_percentages, width=bar_width, color="dimgrey")
@@ -49,7 +54,11 @@ def plot_split_variant_distribution(training_csv_file:str, testing_csv_file:str,
     testing_variant_percentages = [(testing_df['variant'] == variant).mean() * 100 for variant in all_variants]
 
     # Create a grouped bar plot to visualize the distribution
-    plt.figure(figsize=(16, 8))
+    sns.set_theme()
+    sns.set_context('talk')
+    sns.set(style='white')
+    plt.figure(figsize=(14, 8))
+    plt.ion()
 
     bar_width= 0.45
     x = np.arange(len(all_variants))
@@ -58,8 +67,8 @@ def plot_split_variant_distribution(training_csv_file:str, testing_csv_file:str,
 
     # Add bar labels
     for i, (train_percentage, test_percentage) in enumerate(zip(training_variant_percentages, testing_variant_percentages)):
-        plt.text(x[i] - bar_width/2, train_percentage, f'{train_percentage:.2f}%', ha='center', va='bottom', fontsize=8)
-        plt.text(x[i] + bar_width/2, test_percentage, f'{test_percentage:.2f}%', ha='center', va='bottom', fontsize=8)
+        plt.text(x[i] - bar_width/2, train_percentage, f'{train_percentage:.2f}%', ha='center', va='bottom', rotation=30, fontsize=10)
+        plt.text(x[i] + bar_width/2, test_percentage, f'{test_percentage:.2f}%', ha='center', va='bottom', rotation=30, fontsize=10)
 
     # Remove grey grid background
     plt.grid(False)
@@ -112,7 +121,12 @@ def plot_aa_distribution(csv_file:str, save_as:str):
     percentages = [(count/total_counts) * 100 for count in counts]
 
     # Create a bar plot to visualize the distribution
+    sns.set_theme()
+    sns.set_context('talk')
+    sns.set(style='white')
     plt.figure(figsize=(14, 8))
+    plt.ion()
+
     x = np.arange(len(aa_dict))
     bar_width = 0.45
     plt.bar(x, percentages, width=bar_width, color="dimgrey")

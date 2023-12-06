@@ -10,8 +10,11 @@ def plot_rmse_distribution(df, save_as:str):
     """ 
     Plots the RMSE density distribution for repeated sequences. 
     """
+    sns.set_theme()
+    sns.set_context('talk')
     sns.set(style='white')
     plt.figure(figsize=(10, 6))
+    plt.ion()
 
     # Create histogram and kde plot
     sns.histplot(df['rmse'], kde=False, stat='density', bins=100, color='dimgrey', edgecolor='black')
@@ -27,8 +30,11 @@ def plot_value_distribution(df, value_col:str, save_as:str):
     """ 
     Plots the measured value (binding log10Ka or expression ML_meanF) distribution. 
     """
+    sns.set_theme()
+    sns.set_context('talk')
     sns.set(style='white')
     plt.figure(figsize=(10, 6))
+    plt.ion()
 
     # Create histogram and kde plot
     sns.histplot(df[value_col], kde=False, stat='density', bins=100, color='dimgrey', edgecolor='black')
