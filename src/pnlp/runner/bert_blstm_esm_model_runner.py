@@ -94,7 +94,7 @@ def run_model(model, tokenizer, esm, esm_tokenizer, train_set, test_set, n_epoch
             
             save_model(model, optimizer, epoch, save_as + '.model_save')    
 
-    return metrics
+    return metrics_csv
 
 def epoch_iteration(model, tokenizer, esm, esm_tokenizer, regression_loss_fn, masked_language_loss_fn, optimizer, data_loader, num_epochs: int, max_batch: int, alpha:float, device: str, mode: str):
     """ Used in run_model """

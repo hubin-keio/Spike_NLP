@@ -128,8 +128,10 @@ if __name__=='__main__':
     os.makedirs(run_dir, exist_ok = True)
 
     # Load in data
-    embedded_train_pkl = os.path.join(data_dir, 'dms_mutation_expression_meanFs_train_esm_embedded.pkl')
-    embedded_test_pkl = os.path.join(data_dir, 'dms_mutation_expression_meanFs_test_esm_embedded.pkl')
+    # embedded_train_pkl = os.path.join(data_dir, 'dms_mutation_expression_meanFs_train_esm_embedded.pkl') # expression
+    # embedded_test_pkl = os.path.join(data_dir, 'dms_mutation_expression_meanFs_test_esm_embedded.pkl')
+    embedded_train_pkl = os.path.join(data_dir, 'dms_mutation_binding_Kds_train_esm_embedded.pkl') # binding
+    embedded_test_pkl = os.path.join(data_dir, 'dms_mutation_binding_Kds_test_esm_embedded.pkl')
     train_dataset = EmbeddedDMSDataset(embedded_train_pkl)
     test_dataset = EmbeddedDMSDataset(embedded_test_pkl)
 
@@ -138,7 +140,7 @@ if __name__=='__main__':
     batch_size = 32
     max_batch = -1
     lr = 1e-5
-    device = torch.device("cuda:1")
+    device = torch.device("cuda:0")
 
     # GraphSAGE input
     input_channels = train_dataset.embeddings[0].size(1) # number of input channels (dimensions of the embeddings)
