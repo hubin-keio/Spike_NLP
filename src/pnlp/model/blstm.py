@@ -4,14 +4,14 @@ import torch
 from torch import nn
 
 class BLSTM(nn.Module):
-    """ Bidirectional LSTM """
+    """ Bidirectional LSTM. """
 
     def __init__(self,
                  lstm_input_size,    # The number of expected features.
                  lstm_hidden_size,   # The number of features in hidden state h.
                  lstm_num_layers,    # Number of recurrent layers in LSTM.
                  lstm_bidirectional, # Bidrectional LSTM.
-                 fcn_hidden_size):    # The number of features in hidden layer of CN.
+                 fcn_hidden_size):   # The number of features in hidden layer of CN.
         super().__init__()
 
         # LSTM layer

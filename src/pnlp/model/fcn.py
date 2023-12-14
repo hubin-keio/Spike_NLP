@@ -1,7 +1,5 @@
 #!/usr/bin/env python
-"""
-FCN model, utilizing the DMS binding or expression datasets.
-"""
+""" FCN model, utilizing the DMS binding or expression datasets. """
 
 import os
 import sys

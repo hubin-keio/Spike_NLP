@@ -1,6 +1,4 @@
-"""
-BLSTM with FCN layer, MLM, and BERT.
-"""
+""" BLSTM with FCN layer, MLM, and BERT. """
 
 import torch
 import torch.nn as nn
@@ -8,9 +6,8 @@ from pnlp.model.language import ProteinMaskedLanguageModel, BERT
 from model.blstm import BLSTM
 
 class BERT_BLSTM(nn.Module):
-    """"
-    BERT protein language model
-    """
+    """" BERT protein language model. """
+    
     def __init__(self, bert: BERT, blstm:BLSTM, vocab_size: int):
         super().__init__()
 
