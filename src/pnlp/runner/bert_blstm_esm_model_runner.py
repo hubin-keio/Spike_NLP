@@ -3,8 +3,6 @@
 Model runner for bert_blstm.py
 
 TODO: 
-- Standardize plotting functions to be in same style
-- Plots save as pdf DONE
 - Move plotting functions to another file for cleanup
 - Add blstm and bert_blstm to pnlp module? To avoid sys pathing hack
 """
@@ -23,7 +21,7 @@ from typing import Union
 from collections import defaultdict
 from torch import nn
 from torch.utils.data import Dataset, DataLoader
-from model_util import save_model, count_parameters
+from runner_util import save_model, count_parameters
 from transformers import AutoTokenizer, EsmModel 
 from pnlp.embedding.tokenizer import ProteinTokenizer, token_to_index
 from pnlp.model.language import BERT
@@ -78,26 +76,23 @@ def run_model(model, tokenizer, esm, esm_tokenizer, train_set, test_set, n_epoch
     train_loader = DataLoader(train_set, batch_size, shuffle=True)
     test_loader = DataLoader(test_set, batch_size, shuffle=True)
 
-    metrics = defaultdict(list)
+    metrics_csv = save_as + "_metrics.csv"
 
-    for epoch in range(1, n_epochs + 1):
-        train_mlm_accuracy, train_mlm_loss, train_blstm_loss, train_combined_loss = epoch_iteration(model, tokenizer, esm, esm_tokenizer, regression_loss_fn, masked_language_loss_fn, optimizer, train_loader, epoch, max_batch, alpha, device, mode='train')
-        test_mlm_accuracy, test_mlm_loss, test_blstm_loss, test_combined_loss = epoch_iteration(model, tokenizer, esm, esm_tokenizer, regression_loss_fn, masked_language_loss_fn, optimizer, test_loader, epoch, max_batch, alpha, device, mode='test')
+    with open(metrics_csv, "w") as fh:
+        fh.write("epoch,train_blstm_loss,test_blstm_loss\n")
+        for epoch in range(1, n_epochs + 1):
+            train_mlm_accuracy, train_mlm_loss, train_blstm_loss, train_combined_loss = epoch_iteration(model, tokenizer, esm, esm_tokenizer, regression_loss_fn, masked_language_loss_fn, optimizer, train_loader, epoch, max_batch, alpha, device, mode='train')
+            test_mlm_accuracy, test_mlm_loss, test_blstm_loss, test_combined_loss = epoch_iteration(model, tokenizer, esm, esm_tokenizer, regression_loss_fn, masked_language_loss_fn, optimizer, test_loader, epoch, max_batch, alpha, device, mode='test')
 
-        keys = ['epoch',
-                'train_mlm_accuracy', 'test_mlm_accuracy',
-                'train_mlm_loss', 'test_mlm_loss',
-                'train_blstm_loss', 'test_blstm_loss',
-                'train_combined_loss', 'test_combined_loss'] # to add more metrics, add more keys
-
-        for key in keys:
-            metrics[key].append(locals()[key])
-
-        print(f'Epoch {epoch} | Train MLM Acc: {train_mlm_accuracy:.4f}, Test MLM Acc: {test_mlm_accuracy:.4f}\n'
-              f'{" "*(len(str(epoch))+7)}| Train MLM Loss: {train_mlm_loss:.4f}, Test MLM Loss: {test_mlm_loss:.4f}\n'
-              f'{" "*(len(str(epoch))+7)}| Train BLSTM Loss: {train_blstm_loss:.4f}, Test BLSTM Loss: {test_blstm_loss:.4f}\n'
-              f'{" "*(len(str(epoch))+7)}| Train Combined Loss: {train_combined_loss:.4f}, Test Combined Loss: {test_combined_loss:.4f}\n')
-        save_model(model, optimizer, epoch, save_as + '.model_save')
+            print(f'Epoch {epoch} | Train MLM Acc: {train_mlm_accuracy:.4f}, Test MLM Acc: {test_mlm_accuracy:.4f}\n'
+                  f'{" "*(len(str(epoch))+7)}| Train MLM Loss: {train_mlm_loss:.4f}, Test MLM Loss: {test_mlm_loss:.4f}\n'
+                  f'{" "*(len(str(epoch))+7)}| Train BLSTM Loss: {train_blstm_loss:.4f}, Test BLSTM Loss: {test_blstm_loss:.4f}\n'
+                  f'{" "*(len(str(epoch))+7)}| Train Combined Loss: {train_combined_loss:.4f}, Test Combined Loss: {test_combined_loss:.4f}\n')
+            
+            fh.write(f"{epoch},{train_mlm_accuracy},{test_mlm_accuracy},{train_mlm_loss},{test_mlm_loss},{train_blstm_loss},{test_blstm_loss},{train_combined_loss},{test_combined_loss}\n")
+            fh.flush()
+            
+            save_model(model, optimizer, epoch, save_as + '.model_save')    
 
     return metrics
 
@@ -125,6 +120,7 @@ def epoch_iteration(model, tokenizer, esm, esm_tokenizer, regression_loss_fn, ma
         masked_tokenized_seqs = tokenizer(seqs).to(device)
 
         print(masked_tokenized_seqs)
+        exit()
 
         unmasked_tokenized_seqs = tokenizer._batch_pad(seqs).to(device)
         target = targets.to(device).float()
@@ -162,7 +158,6 @@ def calc_train_test_history(metrics: dict, n_train: int, n_test: int, save_as: s
     """ Calculate the average mse per item and rmse """
 
     history_df = pd.DataFrame(metrics)
-    history_df.to_csv(save_as+'_metrics.csv', index=False)
 
     history_df['train_blstm_loss_per'] = history_df['train_blstm_loss']/n_train  # average mse per item
     history_df['test_blstm_loss_per'] = history_df['test_blstm_loss']/n_test
@@ -180,17 +175,26 @@ def plot_combined_history(history_df: str, save_as):
     Generate a single figure with subplots for combined training loss
     from the model run csv file.
     '''
-    fig, ax1 = plt.subplots(nrows=1, ncols=1, figsize=(8, 5))
+    sns.set_theme()
+    sns.set_context('talk')
+    sns.set(style="darkgrid")
+    plt.ion()
+    fig, ax = plt.subplots(nrows=1, ncols=1, figsize=(8, 4))
 
     # Plot Training Loss
-    train_loss_line = ax1.plot(history_df['epoch'], history_df['train_combined_loss'], color='orange', label='Train Loss')
-    test_loss_line = ax1.plot(history_df['epoch'], history_df['test_combined_loss'],color='blue', label='Test Loss')
-    ax1.set_ylabel('Loss')
-    ax1.set_xlabel('Epoch')
-    ax1.legend(loc='upper right')
+    train_loss_line = ax.plot(history_df['epoch'], history_df['train_combined_loss'], color='tab:orange', label='Train Loss')
+    test_loss_line = ax.plot(history_df['epoch'], history_df['test_combined_loss'],color='tab:blue', label='Test Loss')
+    ax.set_ylabel('Loss')
+    ax.set_xlabel('Epoch')
+    ax.legend(loc='upper right')
+
+    # Skipping every other y-axis tick mark
+    yticks = ax.get_yticks()
+    ax.set_yticks(yticks[::2])  # Keep every other tick
 
     plt.style.use('ggplot')
     plt.tight_layout()
+    plt.savefig(save_as+'_combined_loss.png', format='png')
     plt.savefig(save_as+'_combined_loss.pdf', format='pdf')
 
 def plot_mlm_history(history_df: str, save_as):
@@ -198,24 +202,33 @@ def plot_mlm_history(history_df: str, save_as):
     Generate a single figure with subplots for training loss and training accuracy
     from the model run csv file.
     '''
-    fig, (ax1, ax2) = plt.subplots(nrows=2, ncols=1, figsize=(8, 10))
+    sns.set_theme()
+    sns.set_context('talk')
+    sns.set(style="darkgrid")
+    plt.ion()
+    fig, (ax1, ax2) = plt.subplots(nrows=2, ncols=1, figsize=(8, 8))
 
     # Plot Training Loss
-    train_loss_line = ax1.plot(history_df['epoch'], history_df['train_mlm_loss'], color='red', label='Train Loss')
-    test_loss_line = ax1.plot(history_df['epoch'], history_df['test_mlm_loss'],color='orange', label='Test Loss')
+    train_loss_line = ax1.plot(history_df['epoch'], history_df['train_mlm_loss'], color='tab:red', label='Train Loss')
+    test_loss_line = ax1.plot(history_df['epoch'], history_df['test_mlm_loss'],color='tab:orange', label='Test Loss')
     ax1.set_ylabel('Loss')
     ax1.legend(loc='upper right')
 
     # Plot Training Accuracy
-    train_accuracy_line = ax2.plot(history_df['epoch'], history_df['train_mlm_accuracy'], color='blue', label='Train Accuracy')
-    test_accuracy_line = ax2.plot(history_df['epoch'], history_df['test_mlm_accuracy'], color='green', label='Test Accuracy')
+    train_accuracy_line = ax2.plot(history_df['epoch'], history_df['train_mlm_accuracy'], color='tab:blue', label='Train Accuracy')
+    test_accuracy_line = ax2.plot(history_df['epoch'], history_df['test_mlm_accuracy'], color='tab:green', label='Test Accuracy')
     ax2.set_xlabel('Epoch')
     ax2.set_ylabel('Accuracy')
     ax2.set_ylim(0, 1) 
     ax2.legend(loc='upper right')
 
+    # Skipping every other y-axis tick mark
+    a1_yticks = ax1.get_yticks()
+    ax1.set_yticks(a1_yticks[::2])  # Keep every other tick
+
     plt.style.use('ggplot')
     plt.tight_layout()
+    plt.savefig(save_as+'_loss_acc.png', format='png')
     plt.savefig(save_as+'_loss_acc.pdf', format='pdf')
 
 def plot_rmse_history(history_df, save_as: str):
@@ -223,56 +236,60 @@ def plot_rmse_history(history_df, save_as: str):
     
     sns.set_theme()
     sns.set_context('talk')
-    palette = sns.color_palette()
+    sns.set(style="darkgrid")
     plt.ion()
-    fig, ax = plt.subplots(figsize=(8, 5))
+    fig, ax = plt.subplots(figsize=(8, 4))
 
-    sns.lineplot(data=history_df, x=history_df.index, y='test_blstm_rmse_per', label='Test', color=palette[0], ax=ax)
-    sns.lineplot(data=history_df, x=history_df.index, y='train_blstm_rmse_per', label='Train', color=palette[1], ax=ax)
+    sns.lineplot(data=history_df, x=history_df.index, y='train_blstm_rmse_per', label='Train RMSE', color='tab:orange', ax=ax)
+    sns.lineplot(data=history_df, x=history_df.index, y='test_blstm_rmse_per', label='Test RMSE', color='tab:blue', ax=ax)
     
-    # Skipping every other x-axis tick mark
-    xticks = ax.get_xticks()
-    ax.set_xticks(xticks[::2])  # Keep every other tick
-
     # Skipping every other y-axis tick mark
-    yticks = ax.get_yticks()
-    ax.set_yticks(yticks[::2])  # Keep every other tick
-    
-    ax.set(xlabel='Epoch', ylabel='Average RMSE per sample')
+    ax_yticks = ax.get_yticks()
+    ax.set_yticks(ax_yticks[::2])  # Keep every other tick
+
+    ax.set(xlabel='Epoch', ylabel='Average RMSE Per Sample')
     plt.style.use('ggplot')
     plt.tight_layout()
+    plt.savefig(save_as + '_rmse.png', format='png')
     plt.savefig(save_as + '_rmse.pdf', format='pdf') 
 
 if __name__=='__main__':
 
     # Data/results directories
-    dataset = 'dms/expression' # specify
-    data_dir = os.path.join(os.path.dirname(__file__), f'../../../data/{dataset}')
-    results_dir = os.path.join(os.path.dirname(__file__), f'../../../results')
+    result_tag = 'bert_blstm_esm-dms_expression'
+    data_dir = os.path.join(os.path.dirname(__file__), f'../../../data')
+    results_dir = os.path.join(os.path.dirname(__file__), f'../../../results/run_results/bert_blstm_esm')
     
     # Create run directory for results
     now = datetime.datetime.now()
     date_hour_minute = now.strftime("%Y-%m-%d_%H-%M")
-    run_dir = os.path.join(results_dir, f"bert_blstm/{dataset}/bert_blstm-{date_hour_minute}")
+    run_dir = os.path.join(results_dir, f"{result_tag}-{date_hour_minute}")
     os.makedirs(run_dir, exist_ok = True)
 
     # Load in data
-    dms_train_csv = os.path.join(data_dir, 'mutation_expression_meanFs_train.csv') 
-    dms_test_csv = os.path.join(data_dir, 'mutation_expression_meanFs_test.csv')
+    dms_train_csv = os.path.join(data_dir, 'dms_mutation_expression_meanFs_train.csv') 
+    dms_test_csv = os.path.join(data_dir, 'dms_mutation_expression_meanFs_test.csv')
     train_dataset = DMSDataset(dms_train_csv)
     test_dataset = DMSDataset(dms_test_csv)
 
     # ESM input
     esm = EsmModel.from_pretrained("facebook/esm2_t6_8M_UR50D")
 
+    # Can use esm_embeddings as a dictionary based on esm token_id
     esm_embeddings = esm.embeddings.word_embeddings.weight
-    amino_acid = 'A'
+    amino_acid = list('ACDEFGHIKLMNPQRSTUVWXY')
     esm_tokenizer = AutoTokenizer.from_pretrained("facebook/esm2_t33_650M_UR50D")
     token_id = esm_tokenizer.convert_tokens_to_ids(amino_acid)
+    print(token_id)
     amino_acid_embedding = esm_embeddings[token_id]
-    print(amino_acid_embedding.shape)
+    #print(amino_acid_embedding.shape)
 
-    exit()
+    # maybe tokenize & autotokenize, feed tokenized through bert, 
+    # feed autotokenized through to convert and get the esm per token
+    # replace the bert with esm embeddings per token
+
+
+   
 
     # # Load pretrained spike model weights for BERT
     # model_pth = os.path.join(results_dir, 'ddp_runner/ddp-2023-10-06_20-16/ddp-2023-10-06_20-16_best_model_weights.pth') # 320 dim
@@ -296,6 +313,9 @@ if __name__=='__main__':
     n_attn_heads = 10
     tokenizer = ProteinTokenizer(max_len, mask_prob)
     bert = BERT(embedding_dim, dropout, max_len, mask_prob, n_transformer_layers, n_attn_heads)
+    print(tokenizer(amino_acid))
+    
+    #exit()
     #bert.load_state_dict(bert_state_dict)
 
     # BLSTM input
@@ -320,6 +340,6 @@ if __name__=='__main__':
     device = torch.device("cuda:2")
 
     #count_parameters(model)
-    model_result = os.path.join(run_dir, f"bert_blstm-{date_hour_minute}_train_{len(train_dataset)}_test_{len(test_dataset)}")
+    model_result = os.path.join(run_dir, f"{result_tag}-{date_hour_minute}_train_{len(train_dataset)}_test_{len(test_dataset)}")
     metrics  = run_model(model, tokenizer, esm, esm_tokenizer, train_dataset, test_dataset, n_epochs, batch_size, max_batch, alpha, lr, device, model_result)
     calc_train_test_history(metrics, len(train_dataset), len(test_dataset), model_result)

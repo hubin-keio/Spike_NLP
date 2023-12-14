@@ -13,7 +13,7 @@ def plot_combined_history(history_df: str, save_as):
     '''
     sns.set_theme()
     sns.set_context('talk')
-    sns.set(style="whitegrid")
+    sns.set(style="darkgrid")
     plt.ion()
     fig, ax = plt.subplots(nrows=1, ncols=1, figsize=(8, 4))
 
@@ -33,7 +33,6 @@ def plot_combined_history(history_df: str, save_as):
     plt.savefig(save_as+'_combined_loss.png', format='png')
     plt.savefig(save_as+'_combined_loss.pdf', format='pdf')
 
-
 def plot_mlm_history(history_df: str, save_as):
     '''
     Generate a single figure with subplots for training loss and training accuracy
@@ -41,7 +40,7 @@ def plot_mlm_history(history_df: str, save_as):
     '''
     sns.set_theme()
     sns.set_context('talk')
-    sns.set(style="whitegrid")
+    sns.set(style="darkgrid")
     plt.ion()
     fig, (ax1, ax2) = plt.subplots(nrows=2, ncols=1, figsize=(8, 8))
 
@@ -73,7 +72,7 @@ def plot_rmse_history(history_df, save_as: str):
     
     sns.set_theme()
     sns.set_context('talk')
-    sns.set(style="whitegrid")
+    sns.set(style="darkgrid")
     plt.ion()
     fig, ax = plt.subplots(figsize=(8, 4))
 
@@ -92,14 +91,14 @@ def plot_rmse_history(history_df, save_as: str):
  
 if __name__=='__main__':
     # Data/results directories
-    data_dir = os.path.join(os.path.dirname(__file__), '../../../results/plots')
-    binding_csv = os.path.join(data_dir, 'bert_blstm-2023-11-22_23-03_train_84420_test_21105_metrics_per.csv')
+    data_dir = os.path.join(os.path.dirname(__file__), '../../../results/run_results/bert_blstm')
+    binding_csv = os.path.join(data_dir, 'bert_blstm-dms_binding-2023-11-22_23-03/bert_blstm-dms_binding-2023-11-22_23-03_train_84420_test_21105_metrics_per.csv')
     binding_df = pd.read_csv(binding_csv, sep=',', header=0)
     plot_mlm_history(binding_df, binding_csv[:-4]+'_binding')
     plot_rmse_history(binding_df, binding_csv[:-4]+'_binding')
     plot_combined_history(binding_df, binding_csv[:-4]+'_binding')
 
-    expression_csv = os.path.join(data_dir, 'bert_blstm-2023-11-22_23-05_train_93005_test_23252_metrics_per.csv')
+    expression_csv = os.path.join(data_dir, 'bert_blstm-dms_expression-2023-11-22_23-05/bert_blstm-dms_expression-2023-11-22_23-05_train_93005_test_23252_metrics_per.csv')
     expression_df = pd.read_csv(expression_csv, sep=',', header=0)
     plot_mlm_history(expression_df, expression_csv[:-4]+'_expression')
     plot_rmse_history(expression_df, expression_csv[:-4]+'_expression')

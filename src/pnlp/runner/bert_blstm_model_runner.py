@@ -3,9 +3,6 @@
 Model runner for bert_blstm.py
 
 TODO: 
-- Standardize plotting functions to be in same style
-- Plots save as pdf DONE
-- Move plotting functions to another file for cleanup
 - Add blstm and bert_blstm to pnlp module? To avoid sys pathing hack
 """
 
@@ -23,14 +20,14 @@ from typing import Union
 from collections import defaultdict
 from torch import nn
 from torch.utils.data import Dataset, DataLoader
-from model_util import save_model, count_parameters
+from runner_util import save_model, count_parameters
 from pnlp.embedding.tokenizer import ProteinTokenizer, token_to_index
 from pnlp.model.language import BERT
 
 sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 from model.blstm import BLSTM
 from model.bert_blstm import BERT_BLSTM
-from plots.plot_bert_blstm import plot_rmse_history, plot_mlm_history, plot_combined_history # may need fixing!
+from plots.plot_bert_blstm import plot_rmse_history, plot_mlm_history, plot_combined_history 
 
 class DMSDataset(Dataset):
     """ Binding or Expression DMS Dataset, not from pickle! """
@@ -57,7 +54,7 @@ class DMSDataset(Dataset):
         return self.full_df['labels'][idx], self.full_df['sequence'][idx], self.full_df[self.target][idx]
 
 def run_model(model, tokenizer, train_set, test_set, n_epochs: int, batch_size: int, max_batch: Union[int, None], alpha:float, lr:float, device: str, save_as: str):
-    """ Run a model through train and test epochs"""
+    """ Run a model through train and test epochs. """
     
     if not max_batch:
         max_batch = len(train_set)
@@ -70,31 +67,37 @@ def run_model(model, tokenizer, train_set, test_set, n_epochs: int, batch_size: 
     train_loader = DataLoader(train_set, batch_size, shuffle=True)
     test_loader = DataLoader(test_set, batch_size, shuffle=True)
 
-    metrics = defaultdict(list)
+    metrics_csv = save_as + "_metrics.csv"
 
-    for epoch in range(1, n_epochs + 1):
-        train_mlm_accuracy, train_mlm_loss, train_blstm_loss, train_combined_loss = epoch_iteration(model, tokenizer, regression_loss_fn, masked_language_loss_fn, optimizer, train_loader, epoch, max_batch, alpha, device, mode='train')
-        test_mlm_accuracy, test_mlm_loss, test_blstm_loss, test_combined_loss = epoch_iteration(model, tokenizer, regression_loss_fn, masked_language_loss_fn, optimizer, test_loader, epoch, max_batch, alpha, device, mode='test')
+    with open(metrics_csv, "w") as fh:
+        fh.write(f"epoch,"
+                 f"train_mlm_accuracy,test_mlm_accuracy,"
+                 f"train_mlm_loss,test_mlm_loss,"
+                 f"train_blstm_loss,test_blstm_loss,"
+                 f"train_combined_loss,test_combined_loss\n")
 
-        keys = ['epoch',
-                'train_mlm_accuracy', 'test_mlm_accuracy',
-                'train_mlm_loss', 'test_mlm_loss',
-                'train_blstm_loss', 'test_blstm_loss',
-                'train_combined_loss', 'test_combined_loss'] # to add more metrics, add more keys
+        for epoch in range(1, n_epochs + 1):
+            train_mlm_accuracy, train_mlm_loss, train_blstm_loss, train_combined_loss = epoch_iteration(model, tokenizer, regression_loss_fn, masked_language_loss_fn, optimizer, train_loader, epoch, max_batch, alpha, device, mode='train')
+            test_mlm_accuracy, test_mlm_loss, test_blstm_loss, test_combined_loss = epoch_iteration(model, tokenizer, regression_loss_fn, masked_language_loss_fn, optimizer, test_loader, epoch, max_batch, alpha, device, mode='test')
 
-        for key in keys:
-            metrics[key].append(locals()[key])
+            print(f'Epoch {epoch} | Train MLM Acc: {train_mlm_accuracy:.4f}, Test MLM Acc: {test_mlm_accuracy:.4f}\n'
+                  f'{" "*(len(str(epoch))+7)}| Train MLM Loss: {train_mlm_loss:.4f}, Test MLM Loss: {test_mlm_loss:.4f}\n'
+                  f'{" "*(len(str(epoch))+7)}| Train BLSTM Loss: {train_blstm_loss:.4f}, Test BLSTM Loss: {test_blstm_loss:.4f}\n'
+                  f'{" "*(len(str(epoch))+7)}| Train Combined Loss: {train_combined_loss:.4f}, Test Combined Loss: {test_combined_loss:.4f}\n')
+            
+            fh.write(f"{epoch},"
+                     f"{train_mlm_accuracy},{test_mlm_accuracy},"
+                     f"{train_mlm_loss},{test_mlm_loss},"
+                     f"{train_blstm_loss},{test_blstm_loss},"
+                     f"{train_combined_loss},{test_combined_loss}\n")
+            fh.flush()
+            
+            save_model(model, optimizer, epoch, save_as + '.model_save')    
 
-        print(f'Epoch {epoch} | Train MLM Acc: {train_mlm_accuracy:.4f}, Test MLM Acc: {test_mlm_accuracy:.4f}\n'
-              f'{" "*(len(str(epoch))+7)}| Train MLM Loss: {train_mlm_loss:.4f}, Test MLM Loss: {test_mlm_loss:.4f}\n'
-              f'{" "*(len(str(epoch))+7)}| Train BLSTM Loss: {train_blstm_loss:.4f}, Test BLSTM Loss: {test_blstm_loss:.4f}\n'
-              f'{" "*(len(str(epoch))+7)}| Train Combined Loss: {train_combined_loss:.4f}, Test Combined Loss: {test_combined_loss:.4f}\n')
-        save_model(model, optimizer, epoch, save_as + '.model_save')
-
-    return metrics
+    return metrics_csv
 
 def epoch_iteration(model, tokenizer, regression_loss_fn, masked_language_loss_fn, optimizer, data_loader, num_epochs: int, max_batch: int, alpha:float, device: str, mode: str):
-    """ Used in run_model """
+    """ Used in run_model. """
     
     model.train() if mode=='train' else model.eval()
 
@@ -147,11 +150,10 @@ def epoch_iteration(model, tokenizer, regression_loss_fn, masked_language_loss_f
     mlm_accuracy = correct_predictions / total_masked
     return mlm_accuracy, total_mlm_loss, total_blstm_loss, total_combined_loss
 
-def calc_train_test_history(metrics: dict, n_train: int, n_test: int, save_as: str):
+def calc_train_test_history(metrics_csv: str, n_train: int, n_test: int, save_as: str):
     """ Calculate the average mse per item and rmse """
 
-    history_df = pd.DataFrame(metrics)
-    history_df.to_csv(save_as+'_metrics.csv', index=False)
+    history_df = pd.read_csv(metrics_csv, sep=',', header=0)
 
     history_df['train_blstm_loss_per'] = history_df['train_blstm_loss']/n_train  # average mse per item
     history_df['test_blstm_loss_per'] = history_df['test_blstm_loss']/n_test
@@ -159,7 +161,7 @@ def calc_train_test_history(metrics: dict, n_train: int, n_test: int, save_as: s
     history_df['train_blstm_rmse_per'] = np.sqrt(history_df['train_blstm_loss_per'].values)  # rmse
     history_df['test_blstm_rmse_per'] = np.sqrt(history_df['test_blstm_loss_per'].values)
 
-    history_df.to_csv(save_as+'_metrics_per.csv', index=False)
+    history_df.to_csv(metrics_csv.replace('.csv', '_per.csv'), index=False)
     plot_mlm_history(history_df, save_as)
     plot_rmse_history(history_df, save_as)
     plot_combined_history(history_df, save_as)
@@ -167,24 +169,26 @@ def calc_train_test_history(metrics: dict, n_train: int, n_test: int, save_as: s
 if __name__=='__main__':
 
     # Data/results directories
-    dataset = 'dms/expression' # specify
-    data_dir = os.path.join(os.path.dirname(__file__), f'../../../data/{dataset}')
-    results_dir = os.path.join(os.path.dirname(__file__), f'../../../results')
+    result_tag = 'bert_blstm-dms_binding' # specify expression or binding
+    data_dir = os.path.join(os.path.dirname(__file__), f'../../../data')
+    results_dir = os.path.join(os.path.dirname(__file__), f'../../../results/run_results/bert_blstm')
     
     # Create run directory for results
     now = datetime.datetime.now()
     date_hour_minute = now.strftime("%Y-%m-%d_%H-%M")
-    run_dir = os.path.join(results_dir, f"bert_blstm/{dataset}/bert_blstm-{date_hour_minute}")
+    run_dir = os.path.join(results_dir, f"{result_tag}-{date_hour_minute}")
     os.makedirs(run_dir, exist_ok = True)
 
     # Load in data
-    dms_train_csv = os.path.join(data_dir, 'mutation_expression_meanFs_train.csv') 
-    dms_test_csv = os.path.join(data_dir, 'mutation_expression_meanFs_test.csv')
+    # dms_train_csv = os.path.join(data_dir, 'dms_mutation_expression_meanFs_train.csv') # expression
+    # dms_test_csv = os.path.join(data_dir, 'dms_mutation_expression_meanFs_test.csv') 
+    dms_train_csv = os.path.join(data_dir, 'dms_mutation_binding_Kds_train.csv') # binding
+    dms_test_csv = os.path.join(data_dir, 'dms_mutation_binding_Kds_test.csv') 
     train_dataset = DMSDataset(dms_train_csv)
     test_dataset = DMSDataset(dms_test_csv)
 
     # Load pretrained spike model weights for BERT
-    model_pth = os.path.join(results_dir, 'ddp_runner/ddp-2023-10-06_20-16/ddp-2023-10-06_20-16_best_model_weights.pth') # 320 dim
+    model_pth = os.path.join(results_dir, '../ddp_runner/ddp-2023-10-06_20-16/ddp-2023-10-06_20-16_best_model_weights.pth') # 320 dim
     saved_state = torch.load(model_pth, map_location='cuda')
     state_dict = saved_state['model_state_dict']
 
@@ -223,9 +227,10 @@ if __name__=='__main__':
     max_batch = -1
     alpha = 1
     lr = 1e-5
-    device = torch.device("cuda:1")
+    device = torch.device("cuda:0")
 
-    #count_parameters(model)
-    model_result = os.path.join(run_dir, f"bert_blstm-{date_hour_minute}_train_{len(train_dataset)}_test_{len(test_dataset)}")
-    metrics  = run_model(model, tokenizer, train_dataset, test_dataset, n_epochs, batch_size, max_batch, alpha, lr, device, model_result)
-    calc_train_test_history(metrics, len(train_dataset), len(test_dataset), model_result)
+    # Run
+    count_parameters(model)
+    model_result = os.path.join(run_dir, f"{result_tag}-{date_hour_minute}_train_{len(train_dataset)}_test_{len(test_dataset)}")
+    metrics_csv  = run_model(model, tokenizer, train_dataset, test_dataset, n_epochs, batch_size, max_batch, alpha, lr, device, model_result)
+    calc_train_test_history(metrics_csv, len(train_dataset), len(test_dataset), model_result)

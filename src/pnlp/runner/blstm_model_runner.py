@@ -1,6 +1,9 @@
 #!/usr/bin/env python
 """
 Model runner for blstm.py
+
+TODO: 
+- Add blstm and bert_blstm to pnlp module? To avoid sys pathing hack
 """
 
 import os
@@ -9,43 +12,62 @@ import tqdm
 import torch
 import pickle
 import datetime
+import pandas as pd
+import numpy as np
+import seaborn as sns
+import matplotlib.pyplot as plt
 from typing import Union
 from collections import defaultdict
 from torch import nn
 from torch.utils.data import Dataset, DataLoader
-from model_util import save_model, count_parameters, calc_train_test_history
+from runner_util import save_model, count_parameters
+from transformers import AutoTokenizer, EsmModel 
+from pnlp.embedding.tokenizer import ProteinTokenizer, token_to_index
+from pnlp.model.language import BERT
 
 sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 from model.blstm import BLSTM
+from plots.plot_bert_blstm import plot_rmse_history
 
-class EmbeddedDMSDataset(Dataset):
-    """ Binding or Expression DMS Dataset """
+class DMSDataset(Dataset):
+    """ Binding or Expression DMS Dataset, not from pickle! """
     
-    def __init__(self, pickle_file:str, device:str):
+    def __init__(self, csv_file:str):
         """
-        Load from pickle file:
-        - sequence label (seq_id), 
-        - binding or expression numerical target (log10Ka or ML_meanF), and 
-        - embeddings
+        Load from csv file into pandas:
+        - sequence label ('labels'), 
+        - binding or expression numerical target ('log10Ka' or 'ML_meanF'), and 
+        - 'sequence'
         """
-        with open(pickle_file, 'rb') as f:
-            dms_list = pickle.load(f)
-        
-            self.labels = [entry['seq_id'] for entry in dms_list]
-            self.numerical = [entry["log10Ka" if "binding" in pickle_file else "ML_meanF"] for entry in dms_list]
-            self.embeddings = [entry['embedding'] for entry in dms_list]
- 
-        self.device = device
+        try:
+            self.full_df = pd.read_csv(csv_file, sep=',', header=0)
+            self.target = 'log10Ka' if 'binding' in csv_file else 'ML_meanF'
+        except (FileNotFoundError, pd.errors.ParserError, Exception) as e:
+            print(f"Error reading in .csv file: {csv_file}\n{e}", file=sys.stderr)
+            sys.exit(1)
 
     def __len__(self) -> int:
-        return len(self.labels)
+        return len(self.full_df)
 
     def __getitem__(self, idx):
-        # label, feature, target
-        return self.labels[idx], self.embeddings[idx].to(self.device), self.numerical[idx]
+        # label, seq, target
+        return self.full_df['labels'][idx], self.full_df['sequence'][idx], self.full_df[self.target][idx]
 
-def run_model(model, train_set, test_set, n_epochs: int, batch_size: int, lr:float, max_batch: Union[int, None], device: str, save_as: str):
-    """ Run a model through train and test epochs"""
+class ESM_BLSTM(nn.Module):
+    def __init__(self, esm_model, blstm_model):
+        super().__init__()
+        self.esm_model = esm_model
+        self.blstm_model = blstm_model
+
+    def forward(self, tokenized_seqs):
+        with torch.set_grad_enabled(self.training):  # Enable gradients, managed by model.eval() or model.train()
+            esm_output = self.esm_model(**tokenized_seqs).last_hidden_state
+            reshaped_output = esm_output.squeeze(0)  
+            output = self.blstm_model(reshaped_output)
+        return output
+
+def run_model(model, tokenizer, train_set, test_set, n_epochs: int, batch_size: int, max_batch: Union[int, None], lr:float, device: str, save_as: str):
+    """ Run a model through train and test epochs. """
     
     if not max_batch:
         max_batch = len(train_set)
@@ -56,100 +78,121 @@ def run_model(model, train_set, test_set, n_epochs: int, batch_size: int, lr:flo
 
     train_loader = DataLoader(train_set, batch_size, shuffle=True)
     test_loader = DataLoader(test_set, batch_size, shuffle=True)
+
+    metrics_csv = save_as + "_metrics.csv"
     
-    metrics = defaultdict(list)
+    with open(metrics_csv, "w") as fh:
+        fh.write(f"epoch,"
+                 f"train_blstm_loss,test_blstm_loss\n")
 
-    for epoch in range(1, n_epochs + 1):
-        train_loss = epoch_iteration(model, loss_fn, optimizer, train_loader, epoch, max_batch, device, mode='train')
-        test_loss = epoch_iteration(model, loss_fn, optimizer, test_loader, epoch, max_batch, device, mode='test')
+        for epoch in range(1, n_epochs + 1):
+            train_blstm_loss = epoch_iteration(model, tokenizer, loss_fn, optimizer, train_loader, epoch, max_batch, device, mode='train')
+            test_blstm_loss = epoch_iteration(model, tokenizer, loss_fn, optimizer, test_loader, epoch, max_batch, device, mode='test')
 
-        keys = ['train_loss','test_loss'] # to add more metrics, add more keys
-        for key in keys:
-            metrics[key].append(locals()[key])
+            print(f'Epoch {epoch} | Train BLSTM Loss: {train_blstm_loss:.4f}, Test BLSTM Loss: {test_blstm_loss:.4f}\n')
+           
+            fh.write(f"{epoch},"
+                     f"{train_blstm_loss},{test_blstm_loss}\n")
+            fh.flush()
+                
+            save_model(model, optimizer, epoch, save_as + '.model_save')
 
-        print(f'\n'
-              f'Epoch {epoch} | Train MSE: {train_loss:.4f}\n'
-              f'{" "*(len(str(epoch))+8)} Test MSE: {test_loss:.4f}')
+    return metrics_csv
 
-        save_model(model, optimizer, epoch, save_as + '.model_save')
-
-    return metrics
-
-def epoch_iteration(model, loss_fn, optimizer, data_loader, num_epochs: int, max_batch: int, device: str, mode: str):
-    """ Used in run_model """
+def epoch_iteration(model, tokenizer, loss_fn, optimizer, data_loader, num_epochs: int, max_batch: int, device: str, mode: str):
+    """ Used in run_model. """
     
     model.train() if mode=='train' else model.eval()
-    loss = 0
 
     data_iter = tqdm.tqdm(enumerate(data_loader),
                           desc=f'Epoch_{mode}: {num_epochs}',
                           total=len(data_loader),
                           bar_format='{l_bar}{r_bar}')
 
+    total_loss = 0
+
     for batch, batch_data in data_iter:
         if max_batch > 0 and batch >= max_batch:
-            break 
-        
-        label, feature, target = batch_data
-        print(target)
-        
-        feature, target = feature.to(device), target.to(device) 
-        target = target.float()
-        print(target)
-        exit()
+            break
 
+        labels, seqs, targets = batch_data
+        targets = targets.to(device).float()
+        tokenized_seqs = tokenizer(seqs,return_tensors="pt").to(device)
+   
         if mode == 'train':
             optimizer.zero_grad()
-            pred = model(feature).flatten()
-            batch_loss = loss_fn(pred, target)
-            loss += batch_loss.item()
+            pred = model(tokenized_seqs).flatten()
+            batch_loss = loss_fn(pred, targets)
             batch_loss.backward()
             optimizer.step()
 
         else:
             with torch.no_grad():
-                pred = model(feature).flatten()
-                batch_loss = loss_fn(pred, target)
-                loss += batch_loss.item()
+                pred = model(tokenized_seqs).flatten()
+                batch_loss = loss_fn(pred, targets)
 
-    return loss
+        total_loss += batch_loss.item()
+
+    return total_loss
+
+def calc_train_test_history(metrics_csv: str, n_train: int, n_test: int, save_as: str):
+    """ Calculate the average mse per item and rmse """
+
+    history_df = pd.read_csv(metrics_csv, sep=',', header=0)
+
+    history_df['train_blstm_loss_per'] = history_df['train_blstm_loss']/n_train  # average mse per item
+    history_df['test_blstm_loss_per'] = history_df['test_blstm_loss']/n_test
+
+    history_df['train_blstm_rmse_per'] = np.sqrt(history_df['train_blstm_loss_per'].values)  # rmse
+    history_df['test_blstm_rmse_per'] = np.sqrt(history_df['test_blstm_loss_per'].values)
+
+    history_df.to_csv(metrics_csv.replace('.csv', '_per.csv'), index=False)
+    plot_rmse_history(history_df, save_as)
  
 if __name__=='__main__':
 
-    dataset_folder = "expression" # specify
-    embed_method = "rbd_learned" # specify
-
     # Data/results directories
-    data_dir = os.path.join(os.path.dirname(__file__), f'../../../data/dms/{dataset_folder}')
-    results_dir = os.path.join(os.path.dirname(__file__), f'../../../results/blstm/dms/{dataset_folder}')
+    result_tag = 'blstm-esm_dms_binding' # specify expression or binding
+    data_dir = os.path.join(os.path.dirname(__file__), f'../../../data')
+    results_dir = os.path.join(os.path.dirname(__file__), f'../../../results/run_results/blstm')
     
     # Create run directory for results
     now = datetime.datetime.now()
     date_hour_minute = now.strftime("%Y-%m-%d_%H-%M")
-    run_dir = os.path.join(results_dir, f"blstm_{embed_method}-{date_hour_minute}")
+    run_dir = os.path.join(results_dir, f"{result_tag}-{date_hour_minute}")
     os.makedirs(run_dir, exist_ok = True)
 
+    # Load in data
+    # dms_train_csv = os.path.join(data_dir, 'dms_mutation_expression_meanFs_train.csv') # expression
+    # dms_test_csv = os.path.join(data_dir, 'dms_mutation_expression_meanFs_test.csv') 
+    dms_train_csv = os.path.join(data_dir, 'dms_mutation_binding_Kds_train.csv') # binding
+    dms_test_csv = os.path.join(data_dir, 'dms_mutation_binding_Kds_test.csv') 
+    train_dataset = DMSDataset(dms_train_csv)
+    test_dataset = DMSDataset(dms_test_csv)
+
     # Run setup
-    n_epochs = 1
+    n_epochs = 5000
     batch_size = 32
     max_batch = -1
     lr = 1e-5
     device = torch.device("cuda:0")
 
-    # Load in train and test pickle
-    embedded_train_pkl = os.path.join(data_dir, f"mutation_{dataset_folder}_{'Kds' if 'binding' in dataset_folder else 'meanFs'}_train_{embed_method}_embedded_320.pkl")
-    train_dataset = EmbeddedDMSDataset(embedded_train_pkl, device)
-    embedded_test_pkl = os.path.join(data_dir, f"mutation_{dataset_folder}_{'Kds' if 'binding' in dataset_folder else 'meanFs'}_test_{embed_method}_embedded_320.pkl")
-    test_dataset = EmbeddedDMSDataset(embedded_test_pkl, device)
+    # ESM input
+    esm = EsmModel.from_pretrained("facebook/esm2_t6_8M_UR50D").to(device)
+    tokenizer = AutoTokenizer.from_pretrained("facebook/esm2_t33_650M_UR50D")
 
-    lstm_input_size = train_dataset.embeddings[0].size(1)      
-    lstm_hidden_size = lstm_input_size   
+    # BLSTM input
+    lstm_input_size = 320
+    lstm_hidden_size = 320
     lstm_num_layers = 1        
     lstm_bidrectional = True   
-    fcn_hidden_size = lstm_input_size
-    model = BLSTM(lstm_input_size, lstm_hidden_size, lstm_num_layers, lstm_bidrectional, fcn_hidden_size)
+    fcn_hidden_size = 320
+    blstm = BLSTM(lstm_input_size, lstm_hidden_size, lstm_num_layers, lstm_bidrectional, fcn_hidden_size)
 
+    model = ESM_BLSTM(esm, blstm)
+ 
+    # Run
     count_parameters(model)
-    model_result = os.path.join(run_dir, f"blstm-{date_hour_minute}_train_{len(train_dataset)}_test_{len(test_dataset)}")
-    metrics  = run_model(model, train_dataset, test_dataset, n_epochs, batch_size, lr, max_batch, device, model_result)
-    calc_train_test_history(metrics, len(train_dataset), len(test_dataset), embed_method, dataset_folder, "blstm", str(lr), model_result)
+    model_result = os.path.join(run_dir, f"{result_tag}-{date_hour_minute}_train_{len(train_dataset)}_test_{len(test_dataset)}")
+    metrics_csv = run_model(model, tokenizer, train_dataset, test_dataset, n_epochs, batch_size, max_batch, lr, device, model_result)
+    calc_train_test_history(metrics_csv, len(train_dataset), len(test_dataset), model_result)
