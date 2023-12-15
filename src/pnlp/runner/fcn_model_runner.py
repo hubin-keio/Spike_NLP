@@ -112,7 +112,7 @@ def epoch_iteration(model, loss_fn, optimizer, data_loader, num_epochs: int, max
 if __name__=='__main__':
     
     # Data/results directories
-    result_tag = 'graphsage-esm_dms_binding' # specify expression or binding
+    result_tag = 'fcn-esm_dms_binding' # specify expression or binding
     data_dir = os.path.join(os.path.dirname(__file__), f'../../../data/pickles')
     results_dir = os.path.join(os.path.dirname(__file__), f'../../../results/run_results/fcn')
     
