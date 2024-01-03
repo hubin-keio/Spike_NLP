@@ -21,7 +21,10 @@ from pnlp.embedding.tokenizer import ProteinTokenizer, token_to_index, index_to_
 from pnlp.embedding.nlp_embedding import NLPEmbedding
 from pnlp.model.language import ProteinLM
 from pnlp.model.bert import BERT
-from pnlp.plots import plot_run, plot_accuracy_stats
+from pnlp.plots import plot_run #plot_accuracy_stats
+
+sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
+import plots.plot_heatmap 
 
 logger = logging.getLogger(__name__)
 
@@ -66,6 +69,7 @@ class Model_Runner:
                  save: bool,                  # If model will be saved.
                  load_model: bool,
                  checkpoint: bool,
+                 save_as:str,
                  
                  vocab_size:int,
                  embedding_dim:int,           # BERT parameters
@@ -83,11 +87,7 @@ class Model_Runner:
                  device: str='cpu'):
 
         if save:
-            # Create the file name
-            now = datetime.datetime.now()
-            date_hour_minute = now.strftime("%Y-%m-%d_%H-%M")
-            save_path = os.path.join(os.path.dirname(__file__), f'../../../results/runner/{date_hour_minute}')
-            self.save_as = os.path.join(save_path, date_hour_minute)
+            self.save_as = save_as
 
         self.device = device
         self.vocab_size = vocab_size
@@ -121,7 +121,7 @@ class Model_Runner:
         # Set optimizer, scheduler, and criterion
         self.optim = torch.optim.Adam(self.model.parameters(), lr=lr, betas=betas, weight_decay=weight_decay)
         self.optim_schedule = ScheduledOptim(self.optim, embedding_dim, warmup_steps)
-        self.criterion = torch.nn.CrossEntropyLoss(reduction='sum')  # sum of CEL at batch level.
+        self.criterion = torch.nn.CrossEntropyLoss(reduction='sum').to(self.device)  # sum of CEL at batch level.
 
     def count_parameters_with_gradidents(self) -> int:
         count = 0
@@ -222,7 +222,7 @@ class Model_Runner:
 
             if self.load_model and num_epochs == 1:
                 # Run heatmap after loading in best weights file & running over full dataset once
-                plot_accuracy_stats.plot_aa_perc_pred_stats_heatmap(self.aa_preds_tracker, self.run_preds_csv, save=True)
+                plots.plot_heatmap.plot_aa_perc_pred_stats_heatmap(self.aa_preds_tracker, self.run_preds_csv, save=True)
 
     def epoch_iteration(self, num_epochs: int, max_batch: int, data_loader, mode:str):
         """
@@ -247,8 +247,7 @@ class Model_Runner:
                 break 
 
             seq_ids, seqs = batch_data
-            tokenized_seqs = self.tokenizer(seqs)
-            tokenized_seqs = tokenized_seqs.to(self.device)  # input tokens with masks
+            tokenized_seqs = self.tokenizer(seqs).to(self.device) # input tokens with masks
             labels = self.tokenizer._batch_pad(seqs).to(self.device)  # input tokens without masks
 
             if mode == 'train':  # train mode
@@ -361,10 +360,15 @@ class Model_Runner:
 
 if __name__=="__main__":
 
+    # Data/results directories
+    result_tag = 'original_runner' # specify expression or binding
+    data_dir = os.path.join(os.path.dirname(__file__), f'../../../data')
+    results_dir = os.path.join(os.path.dirname(__file__), f'../../../results/run_results/runner')
+    
+    # Create run directory for results
     now = datetime.datetime.now()
     date_hour_minute = now.strftime("%Y-%m-%d_%H-%M")
-    results_dir = os.path.join(os.path.join(os.path.dirname(__file__), '../../../results/runner'))
-    run_dir = os.path.join(results_dir, f'{date_hour_minute}')
+    run_dir = os.path.join(results_dir, f"{result_tag}-{date_hour_minute}")
     os.makedirs(run_dir, exist_ok = True)
 
     # Add logging configuration
@@ -382,12 +386,12 @@ if __name__=="__main__":
     test_dataset = SeqDataset(db_file, "test")
 
     # -= HYPERPARAMETERS =-
-    embedding_dim = 320 # 768
+    embedding_dim = 768 # 320
     dropout = 0.1
     max_len = 280
     mask_prob = 0.15
     n_transformer_layers = 12
-    attn_heads = 10 # 12
+    attn_heads = 12 # 10
     hidden = embedding_dim
 
     batch_size = 64
@@ -406,16 +410,18 @@ if __name__=="__main__":
     SAVE_MODEL = True
     LOAD_MODEL = True
     CHECKPOINT = False
-    model_pth = os.path.join(results_dir, '../ddp_runner/ddp-2023-10-06_20-16/ddp-2023-10-06_20-16_best_model_weights.pth')
+    #model_pth = os.path.join(results_dir, '../ddp_runner/ddp-2023-10-06_20-16/ddp-2023-10-06_20-16_best_model_weights.pth') # 320
+    model_pth = os.path.join(results_dir, '../ddp_runner/ddp-2023-08-16_08-41/ddp-2023-08-16_08-41_best_model_weights.pth') # 768
 
     USE_GPU = True
-    device = torch.device("cuda:1" if torch.cuda.is_available() and USE_GPU else "cpu")
+    device = torch.device("cuda:0" if torch.cuda.is_available() and USE_GPU else "cpu")
 
     torch.manual_seed(0)        # Dataloader uses its own random number generator.
     train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, drop_last=False)
     test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=True, drop_last=False)
 
-    runner = Model_Runner(SAVE_MODEL, LOAD_MODEL, CHECKPOINT,
+    model_result = os.path.join(run_dir, f"{result_tag}-{date_hour_minute}_train_{len(train_dataset)}_test_{len(test_dataset)}")
+    runner = Model_Runner(SAVE_MODEL, LOAD_MODEL, CHECKPOINT, model_result,
                           vocab_size=vocab_size, embedding_dim=embedding_dim, dropout=dropout, 
                           max_len=max_len, mask_prob=mask_prob, n_transformer_layers=n_transformer_layers,
                           n_attn_heads=attn_heads, batch_size=batch_size, lr=lr, betas=betas,
@@ -448,7 +454,7 @@ if __name__=="__main__":
         runner._load_model(runner.model_pth)
         runner.model.train()
         print(f"Loading from saved model at Epoch {runner.epochs_ran}")
-        logger.info(f"RLoading from saved model at Epoch {runner.epochs_ran}")
+        logger.info(f"Loading from saved model at Epoch {runner.epochs_ran}")
     elif LOAD_MODEL and not os.path.exists(model_pth):
         logger.warning(f"The .pth file {model_pth} does not exist; there is no model to load. Ending program.")
         exit()

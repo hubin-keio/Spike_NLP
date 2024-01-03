@@ -17,8 +17,8 @@ def plot_variant_distribution(csv_file:str, save_as:str):
     sns.set_theme()
     sns.set_context('talk')
     sns.set(style='white')
-    plt.figure(figsize=(14, 8))
-    plt.ion()
+    plt.figure(figsize=(16, 9))
+    plt.rcParams['font.family'] = 'sans-serif'
 
     bar_width= 0.45
     x = np.arange(len(all_variants))
@@ -57,8 +57,8 @@ def plot_split_variant_distribution(training_csv_file:str, testing_csv_file:str,
     sns.set_theme()
     sns.set_context('talk')
     sns.set(style='white')
-    plt.figure(figsize=(14, 8))
-    plt.ion()
+    plt.figure(figsize=(16, 9))
+    plt.rcParams['font.family'] = 'sans-serif'
 
     bar_width= 0.45
     x = np.arange(len(all_variants))
@@ -124,8 +124,8 @@ def plot_aa_distribution(csv_file:str, save_as:str):
     sns.set_theme()
     sns.set_context('talk')
     sns.set(style='white')
-    plt.figure(figsize=(14, 8))
-    plt.ion()
+    plt.figure(figsize=(16, 9))
+    plt.rcParams['font.family'] = 'sans-serif'
 
     x = np.arange(len(aa_dict))
     bar_width = 0.45
@@ -154,7 +154,7 @@ def plot_aa_distribution(csv_file:str, save_as:str):
 
 if __name__ == '__main__':
 
-    data_dir = os.path.join(os.path.dirname(__file__), '../../../data/spike_variants')  
+    data_dir = os.path.join(os.path.dirname(__file__), '../../../data')  
     results_dir = os.path.join(os.path.dirname(__file__), '../../../results/plots') 
     full_csv = os.path.join(data_dir, "spikeprot0528.clean.uniq.noX.RBD_variants.csv")
     train_csv = os.path.join(data_dir, "spikeprot0528.clean.uniq.noX.RBD_variants_train.csv")

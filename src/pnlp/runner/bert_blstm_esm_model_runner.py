@@ -10,6 +10,7 @@ TODO:
 import os
 import sys
 import tqdm
+import copy
 import torch
 import pickle
 import datetime
@@ -23,8 +24,10 @@ from torch import nn
 from torch.utils.data import Dataset, DataLoader
 from runner_util import save_model, count_parameters
 from transformers import AutoTokenizer, EsmModel 
+from pnlp.embedding.nlp_embedding import NLPEmbedding
+from pnlp.model.transformer import TransformerBlock
 from pnlp.embedding.tokenizer import ProteinTokenizer, token_to_index
-from pnlp.model.language import BERT
+from pnlp.model.language import ProteinMaskedLanguageModel, BERT
 
 sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 from model.blstm import BLSTM
@@ -54,15 +57,7 @@ class DMSDataset(Dataset):
         # label, seq, target
         return self.full_df['labels'][idx], self.full_df['sequence'][idx], self.full_df[self.target][idx]
 
-def generate_esm_embeddings(batch_sequences, esm, esm_tokenizer, device):
-    tokenized_batch = esm_tokenizer(batch_sequences, padding=True, truncation=True, return_tensors='pt').to(device)
-    with torch.no_grad():
-        outputs = esm(**tokenized_batch)
-        embeddings = outputs.last_hidden_state
-    # embeddings shape: (batch_size, seq_len, embedding_dim)
-    return embeddings  
-
-def run_model(model, tokenizer, esm, esm_tokenizer, train_set, test_set, n_epochs: int, batch_size: int, max_batch: Union[int, None], alpha:float, lr:float, device: str, save_as: str):
+def run_model(model, tokenizer, train_set, test_set, n_epochs: int, batch_size: int, max_batch: Union[int, None], alpha:float, lr:float, device: str, save_as: str):
     """ Run a model through train and test epochs"""
     
     if not max_batch:
@@ -79,10 +74,10 @@ def run_model(model, tokenizer, esm, esm_tokenizer, train_set, test_set, n_epoch
     metrics_csv = save_as + "_metrics.csv"
 
     with open(metrics_csv, "w") as fh:
-        fh.write("epoch,train_blstm_loss,test_blstm_loss\n")
+        fh.write(f"epoch,train_mlm_accuracy,test_mlm_accuracy,train_mlm_loss,test_mlm_loss,train_blstm_loss,test_blstm_loss,train_combined_loss,test_combined_loss\n")
         for epoch in range(1, n_epochs + 1):
-            train_mlm_accuracy, train_mlm_loss, train_blstm_loss, train_combined_loss = epoch_iteration(model, tokenizer, esm, esm_tokenizer, regression_loss_fn, masked_language_loss_fn, optimizer, train_loader, epoch, max_batch, alpha, device, mode='train')
-            test_mlm_accuracy, test_mlm_loss, test_blstm_loss, test_combined_loss = epoch_iteration(model, tokenizer, esm, esm_tokenizer, regression_loss_fn, masked_language_loss_fn, optimizer, test_loader, epoch, max_batch, alpha, device, mode='test')
+            train_mlm_accuracy, train_mlm_loss, train_blstm_loss, train_combined_loss = epoch_iteration(model, tokenizer, regression_loss_fn, masked_language_loss_fn, optimizer, train_loader, epoch, max_batch, alpha, device, mode='train')
+            test_mlm_accuracy, test_mlm_loss, test_blstm_loss, test_combined_loss = epoch_iteration(model, tokenizer, regression_loss_fn, masked_language_loss_fn, optimizer, test_loader, epoch, max_batch, alpha, device, mode='test')
 
             print(f'Epoch {epoch} | Train MLM Acc: {train_mlm_accuracy:.4f}, Test MLM Acc: {test_mlm_accuracy:.4f}\n'
                   f'{" "*(len(str(epoch))+7)}| Train MLM Loss: {train_mlm_loss:.4f}, Test MLM Loss: {test_mlm_loss:.4f}\n'
@@ -96,7 +91,7 @@ def run_model(model, tokenizer, esm, esm_tokenizer, train_set, test_set, n_epoch
 
     return metrics_csv
 
-def epoch_iteration(model, tokenizer, esm, esm_tokenizer, regression_loss_fn, masked_language_loss_fn, optimizer, data_loader, num_epochs: int, max_batch: int, alpha:float, device: str, mode: str):
+def epoch_iteration(model, tokenizer, regression_loss_fn, masked_language_loss_fn, optimizer, data_loader, num_epochs: int, max_batch: int, alpha:float, device: str, mode: str):
     """ Used in run_model """
     
     model.train() if mode=='train' else model.eval()
@@ -118,10 +113,6 @@ def epoch_iteration(model, tokenizer, esm, esm_tokenizer, regression_loss_fn, ma
 
         labels, seqs, targets = batch_data
         masked_tokenized_seqs = tokenizer(seqs).to(device)
-
-        print(masked_tokenized_seqs)
-        exit()
-
         unmasked_tokenized_seqs = tokenizer._batch_pad(seqs).to(device)
         target = targets.to(device).float()
 
@@ -154,16 +145,16 @@ def epoch_iteration(model, tokenizer, esm, esm_tokenizer, regression_loss_fn, ma
     mlm_accuracy = correct_predictions / total_masked
     return mlm_accuracy, total_mlm_loss, total_blstm_loss, total_combined_loss
 
-def calc_train_test_history(metrics: dict, n_train: int, n_test: int, save_as: str):
+def calc_train_test_history(metrics_csv: str, n_train: int, n_test: int, save_as: str):
     """ Calculate the average mse per item and rmse """
 
-    history_df = pd.DataFrame(metrics)
+    history_df = pd.read_csv(metrics_csv, sep=',', header=0)
 
     history_df['train_blstm_loss_per'] = history_df['train_blstm_loss']/n_train  # average mse per item
     history_df['test_blstm_loss_per'] = history_df['test_blstm_loss']/n_test
 
-    history_df['train_blstm_rmse_per'] = np.sqrt(history_df['train_blstm_loss_per'].values)  # rmse
-    history_df['test_blstm_rmse_per'] = np.sqrt(history_df['test_blstm_loss_per'].values)
+    history_df['train_blstm_rmse'] = np.sqrt(history_df['train_blstm_loss_per'].values)  # rmse
+    history_df['test_blstm_rmse'] = np.sqrt(history_df['test_blstm_loss_per'].values)
 
     history_df.to_csv(save_as+'_metrics_per.csv', index=False)
     plot_mlm_history(history_df, save_as)
@@ -240,8 +231,8 @@ def plot_rmse_history(history_df, save_as: str):
     plt.ion()
     fig, ax = plt.subplots(figsize=(8, 4))
 
-    sns.lineplot(data=history_df, x=history_df.index, y='train_blstm_rmse_per', label='Train RMSE', color='tab:orange', ax=ax)
-    sns.lineplot(data=history_df, x=history_df.index, y='test_blstm_rmse_per', label='Test RMSE', color='tab:blue', ax=ax)
+    sns.lineplot(data=history_df, x=history_df.index, y='train_blstm_rmse', label='Train RMSE', color='tab:orange', ax=ax)
+    sns.lineplot(data=history_df, x=history_df.index, y='test_blstm_rmse', label='Test RMSE', color='tab:blue', ax=ax)
     
     # Skipping every other y-axis tick mark
     ax_yticks = ax.get_yticks()
@@ -256,7 +247,7 @@ def plot_rmse_history(history_df, save_as: str):
 if __name__=='__main__':
 
     # Data/results directories
-    result_tag = 'bert_blstm_esm-dms_expression'
+    result_tag = 'bert_blstm_esm-dms_binding'
     data_dir = os.path.join(os.path.dirname(__file__), f'../../../data')
     results_dir = os.path.join(os.path.dirname(__file__), f'../../../results/run_results/bert_blstm_esm')
     
@@ -267,42 +258,37 @@ if __name__=='__main__':
     os.makedirs(run_dir, exist_ok = True)
 
     # Load in data
-    dms_train_csv = os.path.join(data_dir, 'dms_mutation_expression_meanFs_train.csv') 
-    dms_test_csv = os.path.join(data_dir, 'dms_mutation_expression_meanFs_test.csv')
+    # dms_train_csv = os.path.join(data_dir, 'dms_mutation_expression_meanFs_train.csv') # 'bert_blstm_esm-dms_expression'
+    # dms_test_csv = os.path.join(data_dir, 'dms_mutation_expression_meanFs_test.csv') 
+    dms_train_csv = os.path.join(data_dir, 'dms_mutation_binding_Kds_train.csv') # 'bert_blstm_esm-dms_binding'
+    dms_test_csv = os.path.join(data_dir, 'dms_mutation_binding_Kds_test.csv') 
     train_dataset = DMSDataset(dms_train_csv)
     test_dataset = DMSDataset(dms_test_csv)
 
     # ESM input
     esm = EsmModel.from_pretrained("facebook/esm2_t6_8M_UR50D")
-
-    # Can use esm_embeddings as a dictionary based on esm token_id
     esm_embeddings = esm.embeddings.word_embeddings.weight
-    amino_acid = list('ACDEFGHIKLMNPQRSTUVWXY')
     esm_tokenizer = AutoTokenizer.from_pretrained("facebook/esm2_t33_650M_UR50D")
-    token_id = esm_tokenizer.convert_tokens_to_ids(amino_acid)
-    print(token_id)
-    amino_acid_embedding = esm_embeddings[token_id]
-    #print(amino_acid_embedding.shape)
 
-    # maybe tokenize & autotokenize, feed tokenized through bert, 
-    # feed autotokenized through to convert and get the esm per token
-    # replace the bert with esm embeddings per token
+    # Identifying tokens that exist in both datasets
+    esm_tokens = esm_tokenizer.get_vocab()
+    main_tokens = token_to_index
 
+    # Manual mapping for special tokens that exist in both sets, main tokens as keys
+    # '<TRUNCATED>' alternate does not exist in ESM
+    special_token_mapping = {'<START>':'<cls>', 
+                             '<PAD>':'<pad>', 
+                             '<END>':'<eos>', 
+                             '<OTHER>':'<unk>',
+                             '<MASK>':'<mask>'}
 
-   
-
-    # # Load pretrained spike model weights for BERT
-    # model_pth = os.path.join(results_dir, 'ddp_runner/ddp-2023-10-06_20-16/ddp-2023-10-06_20-16_best_model_weights.pth') # 320 dim
-    # saved_state = torch.load(model_pth, map_location='cuda')
-    # state_dict = saved_state['model_state_dict']
-
-    # For loading from ddp models, they have 'module.bert.' or 'module.mlm.' in keys of state_dict
-    # Also need separated out for each corresponding model part
-    # bert_state_dict = {key[len('module.bert.'):]: value for key, value in state_dict.items() if key.startswith('module.bert.')}
-    # print(bert_state_dict)
-    
-    # exit()
-    # mlm_state_dict = {key[len('module.mlm.'):]: value for key, value in state_dict.items() if key.startswith('module.mlm.')}
+    # Create the dictionary to map ESM embeddings to our tokens
+    esm_embedding_map = {}
+    for token in main_tokens:
+        if token in esm_tokens:
+            esm_embedding_map[main_tokens[token]] = esm_embeddings[esm_tokens[token]]
+        elif token in special_token_mapping and special_token_mapping[token] in esm_tokens:
+            esm_embedding_map[main_tokens[token]] = esm_embeddings[esm_tokens[special_token_mapping[token]]]
 
     # BERT input
     max_len = 280
@@ -312,11 +298,17 @@ if __name__=='__main__':
     n_transformer_layers = 12
     n_attn_heads = 10
     tokenizer = ProteinTokenizer(max_len, mask_prob)
-    bert = BERT(embedding_dim, dropout, max_len, mask_prob, n_transformer_layers, n_attn_heads)
-    print(tokenizer(amino_acid))
+
+    # Create a ESM embedding tensor that can be loaded into BERT 
+    vocab_size = len(esm_embedding_map.keys())
+    esm_embeddings = torch.zeros(vocab_size, embedding_dim)  # Initialize a tensor of zeros
+    for token, embedding in esm_embedding_map.items():
+        esm_embeddings[token] = embedding
+    embedding_file = os.path.join(run_dir,'esm_embeddings_320_dim.pth')
+    torch.save(esm_embeddings, embedding_file)
     
-    #exit()
-    #bert.load_state_dict(bert_state_dict)
+    bert = BERT(embedding_dim, dropout, max_len, mask_prob, n_transformer_layers, n_attn_heads)
+    bert.embedding.load_pretrained_embeddings(embedding_file, no_grad=False)
 
     # BLSTM input
     lstm_input_size = 320
@@ -327,19 +319,18 @@ if __name__=='__main__':
     blstm = BLSTM(lstm_input_size, lstm_hidden_size, lstm_num_layers, lstm_bidrectional, fcn_hidden_size)
 
     # BERT_BLSTM input
-    vocab_size = len(token_to_index)
     model = BERT_BLSTM(bert, blstm, vocab_size)
-    #model.mlm.load_state_dict(mlm_state_dict)
 
     # Run setup
-    n_epochs = 1
+    n_epochs = 5000
     batch_size = 32
-    max_batch = 1
+    max_batch = -1
     alpha = 1
     lr = 1e-5
-    device = torch.device("cuda:2")
+    device = torch.device("cuda:1")
 
-    #count_parameters(model)
+    # Run
+    count_parameters(model)
     model_result = os.path.join(run_dir, f"{result_tag}-{date_hour_minute}_train_{len(train_dataset)}_test_{len(test_dataset)}")
-    metrics  = run_model(model, tokenizer, esm, esm_tokenizer, train_dataset, test_dataset, n_epochs, batch_size, max_batch, alpha, lr, device, model_result)
-    calc_train_test_history(metrics, len(train_dataset), len(test_dataset), model_result)
+    metrics_csv = run_model(model, tokenizer, train_dataset, test_dataset, n_epochs, batch_size, max_batch, alpha, lr, device, model_result)
+    calc_train_test_history(metrics_csv, len(train_dataset), len(test_dataset), model_result)

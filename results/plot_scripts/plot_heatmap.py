@@ -51,21 +51,26 @@ def plot_aa_perc_pred_stats_heatmap(incorrect_preds:dict, csv_name:str, save:boo
     df["Error Percentage"] = (df["Count"] / df["Expected Total"]) * 100
     df["Error Percentage"].fillna(0, inplace=True)
 
-    # Plotting
     # Pivot the DataFrame to create a heatmap data structure
     heatmap_data = df.pivot_table(index="Expected", columns="Predicted", values="Error Percentage")
 
-    # Create the heatmap using seaborn
-    plt.figure(figsize=(16, 8))
+    # Plotting heatmap...
+    sns.set_theme()
+    sns.set_context('talk')
 
+    # Converting mm to inches for figsize
+    plt.figure(figsize=(16,9))
+    plt.rcParams['font.family'] = 'sans-serif'
+    
+    # Plot
     cmap = sns.color_palette("rocket_r", as_cmap=True)
     sns.heatmap(heatmap_data, 
-                annot=True, fmt=".3f", 
+                annot=True, fmt=".2f", 
                 linewidth=.5,
                 cmap=cmap, vmin=0, vmax=100,
+                annot_kws={"size": 13},
                 cbar_kws={'drawedges':False, 'label': 'Prediction Rate (%)'})
 
-    plt.title('Amino Acid Prediction Distribution')
     plt.xlabel('Predicted Amino Acid')
     plt.ylabel('Expected Amino Acid')
     plt.yticks(rotation=0)
@@ -73,43 +78,17 @@ def plot_aa_perc_pred_stats_heatmap(incorrect_preds:dict, csv_name:str, save:boo
     plt.tight_layout()
     
     if save:
-        fname = csv_name.replace('.csv', '_aa_perc_pred_stats_heatmap.png')
-        plt.savefig(fname)
+        fname = csv_name.replace('.csv', '_aa_perc_pred_stats_heatmap')
+        plt.savefig(fname+'.png', format='png')
+        plt.savefig(fname+'.pdf', format='pdf')
 
-def plot_aa_error_history(incorrect_preds:dict, csv_name:str, normalize:bool, save:bool=True):
-    """
-    Calculate the incorrect prediction count history across all epochs per amino acid.
-    Returns a dictionary of lists where 'expected aa: [epoch1_ct, epoch2_ct, epoch3_ct, ...]'.
-    """
-    ALL_AAS = 'ACDEFGHIKLMNPQRSTUVWXY'
+if __name__=="__main__":
 
-    # Initialize dictionary, get error count length (epochs) from first key
-    e_aa_error_history = {aa: [0] * len(incorrect_preds[next(iter(incorrect_preds))]) for aa in ALL_AAS}
-
-    for error_type, counts in incorrect_preds.items():
-        e_aa, _ = error_type.split('->')
-        for epoch, count in enumerate(counts):
-            e_aa_error_history[e_aa][epoch] += count
-  
-    df = pd.DataFrame(e_aa_error_history)
-
-    if normalize:
-        #df = df.div(df.sum(axis=1), axis=0)
-        df = ((df - df.min()) / (df.max() - df.min())) * 100
-         
-    # Plot
-    plt.figure(figsize=(10, 8))  # Adjust the figsize for wider plot
-    df.plot(ax=plt.gca())
-
-    plt.title('Error Counts per Epoch for Expected Amino Acids')
-    plt.xlabel('Epoch')
-    plt.ylabel('Normalized Error Counts' if normalize else 'Error Counts')
-    plt.yticks(rotation=0)
-    plt.style.use('ggplot')
-    plt.tight_layout()
-    plt.legend(title="Expected Amino Acid", loc='upper left', bbox_to_anchor=(1, 1))
-
-    if save:
-        fname = csv_name.replace('.csv', '_aa_nmm_error_history.png') if normalize else csv_name.replace('.csv', '_aa_error_history.png')
-        plt.savefig(fname, bbox_inches='tight') # to avoid cutting off legend
-
+    # 320
+    csv1 = "/data/spike_ml/Spike_NLP_kaetlyn/results/run_results/runner/original_runner-2023-12-19_01-51/original_runner-2023-12-19_01-51_train_278299_test_69325_predictions.csv"
+    incorrect_preds1 = csv_reader(csv1)
+    plot_aa_perc_pred_stats_heatmap(incorrect_preds1, csv1, True)
+    # 768
+    csv2 = "/data/spike_ml/Spike_NLP_kaetlyn/results/run_results/runner/original_runner-2023-12-19_01-52/original_runner-2023-12-19_01-52_train_278299_test_69325_predictions.csv"
+    incorrect_preds2 = csv_reader(csv2)
+    plot_aa_perc_pred_stats_heatmap(incorrect_preds2, csv2, True)

@@ -88,18 +88,54 @@ def plot_rmse_history(history_df, save_as: str):
     plt.tight_layout()
     plt.savefig(save_as + '_rmse.png', format='png')
     plt.savefig(save_as + '_rmse.pdf', format='pdf')
+
+def plot_all_loss_history(history_df, save_as:str):
+    """ Plot error1 (MLM), error2 (BLSTM), and total_error training and testing history per epoch. """
+    sns.set_theme()
+    sns.set_context('talk')
+    sns.set(style="darkgrid")
+    fig, ax = plt.subplots(figsize=(16, 9))
+    plt.rcParams['font.family'] = 'sans-serif'
+    fontsize = 20
+
+    # Color mapping
+    palette = sns.color_palette("Paired", 10)
+    
+    # Plot
+    sns.lineplot(data=history_df, x=history_df.index, y='test_mlm_loss', label='Test Error 1', color=palette[0], linewidth=2, ax=ax) 
+    sns.lineplot(data=history_df, x=history_df.index, y='train_mlm_loss', label='Train Error 1', color=palette[1], linewidth=2, ax=ax)
+    sns.lineplot(data=history_df, x=history_df.index, y='test_blstm_rmse_per', label='Test Error 2', color=palette[4], linewidth=2, ax=ax)
+    sns.lineplot(data=history_df, x=history_df.index, y='train_blstm_rmse_per', label='Train Error 2', color=palette[5], linewidth=2, ax=ax)
+    sns.lineplot(data=history_df, x=history_df.index, y='test_combined_loss', label='Test Combined Error', color=palette[8], linewidth=2, ax=ax)
+    sns.lineplot(data=history_df, x=history_df.index, y='train_combined_loss', label='Train Combined Error', color=palette[9], linewidth=2, ax=ax)
+
+    ax.set_xlim(-10, 500)
+    ax_yticks = ax.get_yticks()
+    ax.set_yticks(ax_yticks[::2])  # Keep every other tick
+    ax.tick_params(axis='both', which='major', labelsize=fontsize)
+
+    ax.legend(fontsize=fontsize)
+    ax.set_xlabel('Epoch', fontsize=fontsize)
+    ax.set_ylabel('Loss', fontsize=fontsize)
+
+    plt.style.use('ggplot')
+    plt.tight_layout()
+    plt.savefig(save_as + '_all_loss.png', format='png')
+    plt.savefig(save_as + '_all_loss.pdf', format='pdf')
  
 if __name__=='__main__':
     # Data/results directories
     data_dir = os.path.join(os.path.dirname(__file__), '../../../results/run_results/bert_blstm')
     binding_csv = os.path.join(data_dir, 'bert_blstm-dms_binding-2023-11-22_23-03/bert_blstm-dms_binding-2023-11-22_23-03_train_84420_test_21105_metrics_per.csv')
     binding_df = pd.read_csv(binding_csv, sep=',', header=0)
-    plot_mlm_history(binding_df, binding_csv[:-4]+'_binding')
-    plot_rmse_history(binding_df, binding_csv[:-4]+'_binding')
-    plot_combined_history(binding_df, binding_csv[:-4]+'_binding')
+    plot_mlm_history(binding_df, binding_csv[:-4])
+    plot_rmse_history(binding_df, binding_csv[:-4])
+    plot_combined_history(binding_df, binding_csv[:-4])
+    plot_all_loss_history(binding_df, binding_csv[:-4])
 
     expression_csv = os.path.join(data_dir, 'bert_blstm-dms_expression-2023-11-22_23-05/bert_blstm-dms_expression-2023-11-22_23-05_train_93005_test_23252_metrics_per.csv')
     expression_df = pd.read_csv(expression_csv, sep=',', header=0)
-    plot_mlm_history(expression_df, expression_csv[:-4]+'_expression')
-    plot_rmse_history(expression_df, expression_csv[:-4]+'_expression')
-    plot_combined_history(expression_df, expression_csv[:-4]+'_expression')
+    plot_mlm_history(expression_df, expression_csv[:-4])
+    plot_rmse_history(expression_df, expression_csv[:-4])
+    plot_combined_history(expression_df, expression_csv[:-4])
+    plot_all_loss_history(expression_df, expression_csv[:-4])

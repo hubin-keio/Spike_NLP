@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 """
-Model runner for blstm.py
+Model runner for blstm.py, where ESM embeddings get updated.
 
 TODO: 
 - Add blstm and bert_blstm to pnlp module? To avoid sys pathing hack
@@ -20,14 +20,13 @@ from typing import Union
 from collections import defaultdict
 from torch import nn
 from torch.utils.data import Dataset, DataLoader
-from runner_util import save_model, count_parameters
+from runner_util import save_model, count_parameters, calc_train_test_history
 from transformers import AutoTokenizer, EsmModel 
 from pnlp.embedding.tokenizer import ProteinTokenizer, token_to_index
 from pnlp.model.language import BERT
 
 sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 from model.blstm import BLSTM
-from plots.plot_bert_blstm import plot_rmse_history
 
 class DMSDataset(Dataset):
     """ Binding or Expression DMS Dataset, not from pickle! """
@@ -54,19 +53,19 @@ class DMSDataset(Dataset):
         return self.full_df['labels'][idx], self.full_df['sequence'][idx], self.full_df[self.target][idx]
 
 class ESM_BLSTM(nn.Module):
-    def __init__(self, esm_model, blstm_model):
+    def __init__(self, esm, blstm):
         super().__init__()
-        self.esm_model = esm_model
-        self.blstm_model = blstm_model
+        self.esm = esm
+        self.blstm = blstm
 
     def forward(self, tokenized_seqs):
-        with torch.set_grad_enabled(self.training):  # Enable gradients, managed by model.eval() or model.train()
-            esm_output = self.esm_model(**tokenized_seqs).last_hidden_state
+        with torch.set_grad_enabled(self.training):  # Enable gradients, managed by model.eval() or model.train() in epoch_iteration
+            esm_output = self.esm(**tokenized_seqs).last_hidden_state
             reshaped_output = esm_output.squeeze(0)  
-            output = self.blstm_model(reshaped_output)
+            output = self.blstm(reshaped_output)
         return output
 
-def run_model(model, tokenizer, train_set, test_set, n_epochs: int, batch_size: int, max_batch: Union[int, None], lr:float, device: str, save_as: str):
+def run_model(model, tokenizer, train_set, test_set, n_epochs: int, batch_size: int, lr:float, max_batch: Union[int, None], device: str, save_as: str):
     """ Run a model through train and test epochs. """
     
     if not max_batch:
@@ -83,16 +82,16 @@ def run_model(model, tokenizer, train_set, test_set, n_epochs: int, batch_size: 
     
     with open(metrics_csv, "w") as fh:
         fh.write(f"epoch,"
-                 f"train_blstm_loss,test_blstm_loss\n")
+                 f"train_loss,test_loss\n")
 
         for epoch in range(1, n_epochs + 1):
-            train_blstm_loss = epoch_iteration(model, tokenizer, loss_fn, optimizer, train_loader, epoch, max_batch, device, mode='train')
-            test_blstm_loss = epoch_iteration(model, tokenizer, loss_fn, optimizer, test_loader, epoch, max_batch, device, mode='test')
+            train_loss = epoch_iteration(model, tokenizer, loss_fn, optimizer, train_loader, epoch, max_batch, device, mode='train')
+            test_loss = epoch_iteration(model, tokenizer, loss_fn, optimizer, test_loader, epoch, max_batch, device, mode='test')
 
-            print(f'Epoch {epoch} | Train BLSTM Loss: {train_blstm_loss:.4f}, Test BLSTM Loss: {test_blstm_loss:.4f}\n')
+            print(f'Epoch {epoch} | Train BLSTM Loss: {train_loss:.4f}, Test BLSTM Loss: {test_loss:.4f}\n')
            
             fh.write(f"{epoch},"
-                     f"{train_blstm_loss},{test_blstm_loss}\n")
+                     f"{train_loss},{test_loss}\n")
             fh.flush()
                 
             save_model(model, optimizer, epoch, save_as + '.model_save')
@@ -134,25 +133,11 @@ def epoch_iteration(model, tokenizer, loss_fn, optimizer, data_loader, num_epoch
         total_loss += batch_loss.item()
 
     return total_loss
-
-def calc_train_test_history(metrics_csv: str, n_train: int, n_test: int, save_as: str):
-    """ Calculate the average mse per item and rmse """
-
-    history_df = pd.read_csv(metrics_csv, sep=',', header=0)
-
-    history_df['train_blstm_loss_per'] = history_df['train_blstm_loss']/n_train  # average mse per item
-    history_df['test_blstm_loss_per'] = history_df['test_blstm_loss']/n_test
-
-    history_df['train_blstm_rmse_per'] = np.sqrt(history_df['train_blstm_loss_per'].values)  # rmse
-    history_df['test_blstm_rmse_per'] = np.sqrt(history_df['test_blstm_loss_per'].values)
-
-    history_df.to_csv(metrics_csv.replace('.csv', '_per.csv'), index=False)
-    plot_rmse_history(history_df, save_as)
  
 if __name__=='__main__':
 
     # Data/results directories
-    result_tag = 'blstm-esm_dms_binding' # specify expression or binding
+    result_tag = 'blstm_updating-esm_dms_binding' # specify expression or binding
     data_dir = os.path.join(os.path.dirname(__file__), f'../../../data')
     results_dir = os.path.join(os.path.dirname(__file__), f'../../../results/run_results/blstm')
     
@@ -162,11 +147,12 @@ if __name__=='__main__':
     run_dir = os.path.join(results_dir, f"{result_tag}-{date_hour_minute}")
     os.makedirs(run_dir, exist_ok = True)
 
-    # Load in data
-    # dms_train_csv = os.path.join(data_dir, 'dms_mutation_expression_meanFs_train.csv') # expression
-    # dms_test_csv = os.path.join(data_dir, 'dms_mutation_expression_meanFs_test.csv') 
-    dms_train_csv = os.path.join(data_dir, 'dms_mutation_binding_Kds_train.csv') # binding
+    # Load in data (from csv)
+    dms_train_csv = os.path.join(data_dir, 'dms_mutation_expression_meanFs_train.csv') # blstm_updating-esm_dms_expression
+    dms_test_csv = os.path.join(data_dir, 'dms_mutation_expression_meanFs_test.csv') 
+    dms_train_csv = os.path.join(data_dir, 'dms_mutation_binding_Kds_train.csv') # blstm_updating-esm_dms_binding
     dms_test_csv = os.path.join(data_dir, 'dms_mutation_binding_Kds_test.csv') 
+
     train_dataset = DMSDataset(dms_train_csv)
     test_dataset = DMSDataset(dms_test_csv)
 
@@ -194,5 +180,5 @@ if __name__=='__main__':
     # Run
     count_parameters(model)
     model_result = os.path.join(run_dir, f"{result_tag}-{date_hour_minute}_train_{len(train_dataset)}_test_{len(test_dataset)}")
-    metrics_csv = run_model(model, tokenizer, train_dataset, test_dataset, n_epochs, batch_size, max_batch, lr, device, model_result)
+    metrics_csv = run_model(model, tokenizer, train_dataset, test_dataset, n_epochs, batch_size, lr, max_batch, device, model_result)
     calc_train_test_history(metrics_csv, len(train_dataset), len(test_dataset), model_result)
