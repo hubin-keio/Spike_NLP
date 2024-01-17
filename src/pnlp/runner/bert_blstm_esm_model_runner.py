@@ -31,6 +31,8 @@ from pnlp.model.language import ProteinMaskedLanguageModel, BERT
 sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 from model.blstm import BLSTM
 from model.bert_blstm import BERT_BLSTM
+sys.path.append(os.path.join(os.path.dirname(__file__), '../../../results'))
+from plot_scripts.plot_bert_blstm import calc_train_test_history 
 
 class DMSDataset(Dataset):
     """ Binding or Expression DMS Dataset, not from pickle! """
@@ -153,22 +155,23 @@ def epoch_iteration(model, tokenizer, regression_loss_fn, masked_language_loss_f
     mlm_accuracy = correct_predictions / total_masked
     return mlm_accuracy, total_mlm_loss, total_blstm_loss, total_combined_loss
 
-def create_esm_embedding(embedding_dim:int, embedding_file_name:str):
+def create_esm_embedding(embedding_dim:int, save_location:str) -> tuple:
     """
     Map our tokenizer tokens used for NLP embedding and BERT to
     Huggingface AutoTokenizer tokens and their corresponding embedding
     weights in the ESM model. Then create an embedding file (.pth) to 
     be utilized as pretrained embedding weights for loading into the BERT model.
+    Returns name of the embedding file and the vocab size.
 
     Inputs:
-    - Embedding dimension that is the same embedding dimension to be used for
-        the BERT model (MUST be the SAME)
-    - Embedding file name to be saved as, recommended to be descriptive on the embedding dim:
-        ex: esm_embeddings_{embedding_dim}_dim.pth
+    - embedding_dim: MUST be the same as embedding dimension to be used for the BERT model.
+    - save_location: Location to save embedding file.
 
     Be sure to import from Huggingface:
         from transformers import AutoTokenizer, EsmModel 
     """
+    embedding_file = os.path.join(save_location, f"esm_embeddings_{embedding_dim}_dim.pth")
+
     # ESM input
     esm = EsmModel.from_pretrained("facebook/esm2_t6_8M_UR50D")
     esm_embeddings = esm.embeddings.word_embeddings.weight
@@ -201,7 +204,7 @@ def create_esm_embedding(embedding_dim:int, embedding_file_name:str):
         esm_embeddings[token] = embedding
     torch.save(esm_embeddings, embedding_file)
 
-    return embedding_file
+    return embedding_file, vocab_size
 
 if __name__=='__main__':
 
@@ -209,7 +212,7 @@ if __name__=='__main__':
     result_tag = 'bert_blstm_esm-dms_binding'
     data_dir = os.path.join(os.path.dirname(__file__), f'../../../data')
     results_dir = os.path.join(os.path.dirname(__file__), f'../../../results/run_results/bert_blstm_esm')
-    
+
     # Create run directory for results
     now = datetime.datetime.now()
     date_hour_minute = now.strftime("%Y-%m-%d_%H-%M")
@@ -234,8 +237,7 @@ if __name__=='__main__':
     tokenizer = ProteinTokenizer(max_len, mask_prob)
 
     # Create and load esm embedding file to BERT model
-    embedding_file_name = os.path.join(run_dir, f'esm_embeddings_{embedding_dim}_dim.pth')
-    embedding_file = create_esm_embedding(embedding_dim, embedding_file_name)
+    embedding_file, vocab_size = create_esm_embedding(embedding_dim, run_dir)
 
     bert = BERT(embedding_dim, dropout, max_len, mask_prob, n_transformer_layers, n_attn_heads)
     bert.embedding.load_pretrained_embeddings(embedding_file, no_grad=False)

@@ -27,7 +27,8 @@ from pnlp.model.language import BERT
 sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 from model.blstm import BLSTM
 from model.bert_blstm import BERT_BLSTM
-from plots.plot_bert_blstm import plot_rmse_history, plot_mlm_history, plot_combined_history 
+sys.path.append(os.path.join(os.path.dirname(__file__), '../../../results'))
+from plot_scripts.plot_bert_blstm import calc_train_test_history 
 
 class DMSDataset(Dataset):
     """ Binding or Expression DMS Dataset, not from pickle! """
