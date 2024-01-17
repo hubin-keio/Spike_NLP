@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 """
-Model runner for blstm.py, where ESM embeddings get updated.
+Model runner for ESM model fed into blstm.py, where ESM embeddings get updated.
 
 TODO: 
 - Add blstm and bert_blstm to pnlp module? To avoid sys pathing hack
@@ -137,9 +137,9 @@ def epoch_iteration(model, tokenizer, loss_fn, optimizer, data_loader, num_epoch
 if __name__=='__main__':
 
     # Data/results directories
-    result_tag = 'blstm_updating-esm_dms_binding' # specify expression or binding
+    result_tag = 'esm-blstm-esm_dms_binding' # specify expression or binding
     data_dir = os.path.join(os.path.dirname(__file__), f'../../../data')
-    results_dir = os.path.join(os.path.dirname(__file__), f'../../../results/run_results/blstm')
+    results_dir = os.path.join(os.path.dirname(__file__), f'../../../results/run_results/esm-blstm')
     
     # Create run directory for results
     now = datetime.datetime.now()
@@ -148,10 +148,10 @@ if __name__=='__main__':
     os.makedirs(run_dir, exist_ok = True)
 
     # Load in data (from csv)
-    dms_train_csv = os.path.join(data_dir, 'dms_mutation_expression_meanFs_train.csv') # blstm_updating-esm_dms_expression
+    dms_train_csv = os.path.join(data_dir, 'dms_mutation_expression_meanFs_train.csv') # esm-blstm-esm_dms_expression
     dms_test_csv = os.path.join(data_dir, 'dms_mutation_expression_meanFs_test.csv') 
-    dms_train_csv = os.path.join(data_dir, 'dms_mutation_binding_Kds_train.csv') # blstm_updating-esm_dms_binding
-    dms_test_csv = os.path.join(data_dir, 'dms_mutation_binding_Kds_test.csv') 
+    # dms_train_csv = os.path.join(data_dir, 'dms_mutation_binding_Kds_train.csv') # esm-blstm-esm_dms_binding
+    # dms_test_csv = os.path.join(data_dir, 'dms_mutation_binding_Kds_test.csv') 
 
     train_dataset = DMSDataset(dms_train_csv)
     test_dataset = DMSDataset(dms_test_csv)

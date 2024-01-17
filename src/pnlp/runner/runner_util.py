@@ -63,6 +63,7 @@ def calc_train_test_history(metrics_csv: str, n_train: int, n_test: int, save_as
 
 def plot_rmse_history(history_df, save_as: str):
     """ Plot RMSE training and testing history per epoch. """
+
     sns.set_theme()
     sns.set_context('talk')
     sns.set(style="darkgrid")
@@ -75,78 +76,164 @@ def plot_rmse_history(history_df, save_as: str):
     plt.rcParams['font.family'] = 'sans-serif'
 
     # Plot
-    sns.lineplot(data=history_df, x=history_df.index, y='test_rmse', label='Test RMSE', color='tab:blue', linewidth=0.5, ax=ax)
-    sns.lineplot(data=history_df, x=history_df.index, y='train_rmse', label='Train RMSE', color='tab:orange', linewidth=0.5,ax=ax)
+    sns.lineplot(data=history_df, x=history_df.index, y='test_rmse', color='tab:blue', linewidth=0.5, ax=ax) # add label='Test RMSE' for legend
+    sns.lineplot(data=history_df, x=history_df.index, y='train_rmse', color='tab:orange', linewidth=0.5,ax=ax) # add label='Train RMSE' for legend
     
     # Set the font size
     font_size = 8
     ax.set_xlabel('Epoch', fontsize=font_size)
-    ax.set_ylabel('Average RMSE Per Sample', fontsize=font_size)
+    ax.set_ylabel(f'RMSE', fontsize=font_size)
     ax.tick_params(axis='both', which='major', labelsize=font_size)
-    ax.legend(fontsize=font_size)
+    # ax.legend(fontsize=font_size)
 
-    # Skipping every other y-, x-axis tick mark
-    #ax_yticks = ax.get_yticks()
-    #ax.set_yticks(ax_yticks[::2])  # Keep every other tick
-    #ax.set_ylim(0.6, 1.4)
+    # Skipping every other x-axis tick mark
+    ax_yticks = ax.get_yticks()
+    ax.set_ylim(-0.1, 1.8)
 
     ax_xticks = ax.get_xticks()
-    ax.set_xticks(ax_xticks[::2])  # Keep every other tick
+    new_xlabels = ['' if i % 2 else label for i, label in enumerate(ax.get_xticklabels())]
+    ax.set_xticks(ax_xticks)
+    ax.set_xticklabels(new_xlabels)
     ax.set_xlim(-100, 5000)
 
     plt.tight_layout()
-    plt.savefig(save_as + '_rmse.png', format='png')
     plt.savefig(save_as + '_rmse.pdf', format='pdf')
 
-def plot_subplot(binding_csv, expression_csv, save_as:str):
-    """ Plot subplot of RMSE training and testing history per epoch for binding and expression. """
+def plot_run(csv_name: str, save: bool = True):
+    '''
+    Generate a single figure with subplots for training loss and training accuracy
+    from the model run csv file.
 
-    binding_history_df = pd.read_csv(binding_csv, sep=',', header=0)
-    expression_history_df = pd.read_csv(expression_csv, sep=',', header=0)
+    For runner.py and gpu_ddp_runner.py
+    '''
+    df = pd.read_csv(csv_name)
+    df.columns = df.columns.str.strip()
 
     sns.set_theme()
     sns.set_context('talk')
     sns.set(style="darkgrid")
-    plt.ion()
-    fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(8, 8))
 
-    # Plot for binding history
-    sns.lineplot(data=binding_history_df, x=binding_history_df.index, y='train_rmse', label='Train RMSE', color='tab:orange', ax=ax1)
-    sns.lineplot(data=binding_history_df, x=binding_history_df.index, y='test_rmse', label='Test RMSE', color='tab:blue', alpha=0.9, ax=ax1)
-    ax1.set(xlabel='Epoch', ylabel='Average RMSE Per Sample (Binding)')
+    # Converting mm to inches for figsize
+    width_in = 88/25.4 # mm to inches
+    ratio = 16/9
+    height_in = width_in/ratio 
+    fig, (ax1, ax2) = plt.subplots(nrows=2, ncols=1, figsize=(width_in, 2*height_in))
+    plt.rcParams['font.family'] = 'sans-serif'
 
-    # Plot for expression history
-    sns.lineplot(data=expression_history_df, x=expression_history_df.index, y='train_rmse', label='Train RMSE', color='tab:green', ax=ax2)
-    sns.lineplot(data=expression_history_df, x=expression_history_df.index, y='test_rmse', label='Test RMSE', color='tab:red', alpha=0.9, ax=ax2)
-    ax2.set(xlabel='Epoch', ylabel='Average RMSE Per Sample (Expression)')
+    # Set the font size
+    font_size = 8
 
-    plt.style.use('ggplot')
+    # Plot Training Loss
+    train_loss_line = ax1.plot(df['epoch'], df['train_loss'], color='red', linewidth=0.5, label='Train Loss')
+    test_loss_line = ax1.plot(df['epoch'], df['test_loss'], color='orange', linewidth=0.5, label='Test Loss')
+    ax1.set_ylabel('Loss', fontsize=font_size)
+    ax1.legend(loc='upper right', fontsize=font_size)
+    ax1.tick_params(axis='both', which='major', labelsize=font_size)
+    ax1.yaxis.get_offset_text().set_fontsize(font_size) 
+    ax1.set_ylim(-0.5e6, 8e6) 
+
+    # Plot Training Accuracy
+    train_accuracy_line = ax2.plot(df['epoch'], df['train_accuracy']*100, color='blue', linewidth=0.5, label='Train Accuracy')
+    test_accuracy_line = ax2.plot(df['epoch'], df['test_accuracy']*100, color='green', linewidth=0.5, label='Test Accuracy')
+    ax2.set_xlabel('Epoch', fontsize=font_size)
+    ax2.set_ylabel('Accuracy', fontsize=font_size)
+    ax2.set_ylim(0, 100) 
+    ax2.legend(loc='lower right', fontsize=font_size)
+    ax2.tick_params(axis='both', which='major', labelsize=font_size)
+
     plt.tight_layout()
-    plt.savefig(save_as + '_rmse.png', format='png')
-    plt.savefig(save_as + '_rmse.pdf', format='pdf')
+
+    if save:
+        combined_fname = csv_name.replace('.csv', '_loss_acc.pdf')
+        plt.savefig(combined_fname, format='pdf')
 
 if __name__=='__main__':
 
-    # results_dir = os.path.join(os.path.dirname(__file__), f'../../../results/run_results/fcn/fcn_esm-2023-10-17_15-38')
-    # csv_file = os.path.join(results_dir, "fcn2023-10-17_15-38_train_84242_test_21285.csv")
-    # history_df = pd.read_csv(csv_file, sep=',', header=0)
-    # save_as = os.path.join(results_dir, 'fcn-dms_binding-2023-10-17_15-38_train_84242_test_21285.csv')
-    # plot_rmse_history(history_df, save_as)
+    results_dir = os.path.join(os.path.dirname(__file__), f'../../../results/run_results')
+    plot_run(os.path.join(results_dir,"ddp_runner/original_ddp_runner-2024-01-08_01-14/original_ddp_runner-2024-01-08_01-14_train_278299_test_69325_results.csv"), True)
+    plot_run(os.path.join(results_dir,"ddp_runner/ddp-2023-08-16_08-41/ddp-2023-08-16_08-41_results.csv"), True)
+    plot_run(os.path.join(results_dir,"ddp_runner/ddp-2023-10-06_20-16/ddp-2023-10-06_20-16_results.csv"), True)
 
-    # results_dir = os.path.join(os.path.dirname(__file__), f'../../../results/run_results/graphsage/graphsage-esm_dms_expression-2023-12-20_08-48')
-    # csv_file = os.path.join(results_dir, "graphsage-esm_dms_expression-2023-12-20_08-48_train_93005_test_23252_metrics_per.csv")
+    # # = BINDING = -> y axis (-0.2, 3.2)
+    # # Figure - RBD Binding w/ ESM 
+    # # - FCN
+    # csv_file = os.path.join(results_dir, "fcn/fcn-esm_dms_binding-2023-10-17_15-38/fcn-esm_dms_binding-2023-10-17_15-38_train_84420_test_21105_metrics_per.csv")
     # history_df = pd.read_csv(csv_file, sep=',', header=0)
     # save_as = csv_file.replace("_metrics_per.csv", "")
     # plot_rmse_history(history_df, save_as)
-
-    # results_dir = os.path.join(os.path.dirname(__file__), f'../../../results/run_results/blstm/blstm-esm_dms_binding-2023-12-07_13-53')
-    # csv_file = os.path.join(results_dir, "blstm-esm_dms_binding-2023-12-07_13-53_train_84420_test_21105_metrics_per.csv")
+    # # - GCN
+    # csv_file = os.path.join(results_dir, "graphsage/graphsage-esm_dms_binding-2023-12-13_18-14/graphsage-esm_dms_binding-2023-12-13_18-14_train_84420_test_21105_metrics_per.csv")
     # history_df = pd.read_csv(csv_file, sep=',', header=0)
-    # save_as = csv_file.replace("_metrics_per.csv", "_fixed_embedding")
+    # save_as = csv_file.replace("_metrics_per.csv", "")
     # plot_rmse_history(history_df, save_as)
+    # # - BLSTM
+    # csv_file = os.path.join(results_dir, "blstm/blstm-esm_dms_binding-2023-12-07_13-53/blstm-esm_dms_binding-2023-12-07_13-53_train_84420_test_21105_metrics_per.csv")
+    # history_df = pd.read_csv(csv_file, sep=',', header=0)
+    # save_as = csv_file.replace("_metrics_per.csv", "")
+    # plot_rmse_history(history_df, save_as)
+    # # - ESM-BLSTM 
+    # csv_file = os.path.join(results_dir, "esm-blstm/esm-blstm-esm_dms_binding-2023-12-12_17-02/esm-blstm-esm_dms_binding-2023-12-12_17-02_train_84420_test_21105_metrics_per.csv")
+    # history_df = pd.read_csv(csv_file, sep=',', header=0)
+    # save_as = csv_file.replace("_metrics_per.csv", "")
+    # plot_rmse_history(history_df, save_as)    
+    # # - BERT-BLSTM_ESM -> plot_bert_blstm.py
 
-    results_dir = os.path.join(os.path.dirname(__file__), f'../../../results/run_results/blstm/blstm-esm_dms_binding-2023-12-12_17-02')
-    csv_file = os.path.join(results_dir, "blstm-esm_dms_binding-2023-12-12_17-02_train_84420_test_21105_metrics_per.csv")
-    history_df = pd.read_csv(csv_file, sep=',', header=0)
-    save_as = csv_file.replace("_metrics_per.csv", "_updating_embedding")
-    plot_rmse_history(history_df, save_as)
+    # # Figure - RBD Binding w/ RBD Learned
+    # # - FCN
+    # csv_file = os.path.join(results_dir, "fcn/fcn-rbd_learned_320_dms_binding-2023-12-21_09-44/fcn-rbd_learned_320_dms_binding-2023-12-21_09-44_train_84420_test_21105_metrics_per.csv")
+    # history_df = pd.read_csv(csv_file, sep=',', header=0)
+    # save_as = csv_file.replace("_metrics_per.csv", "")
+    # plot_rmse_history(history_df, save_as)
+    # # - GCN
+    # csv_file = os.path.join(results_dir, "graphsage/graphsage-rbd_learned_320_dms_binding-2024-01-02_14-50/graphsage-rbd_learned_320_dms_binding-2024-01-02_14-50_train_84420_test_21105_metrics_per.csv")
+    # history_df = pd.read_csv(csv_file, sep=',', header=0)
+    # save_as = csv_file.replace("_metrics_per.csv", "")
+    # plot_rmse_history(history_df, save_as)
+    # # - BLSTM 
+    # csv_file = os.path.join(results_dir, "blstm/blstm-rbd_learned_320_dms_binding-2024-01-04_14-12/blstm-rbd_learned_320_dms_binding-2024-01-04_14-12_train_84420_test_21105_metrics_per.csv")
+    # history_df = pd.read_csv(csv_file, sep=',', header=0)
+    # save_as = csv_file.replace("_metrics_per.csv", "")
+    # plot_rmse_history(history_df, save_as)
+    # # - BERT-BLSTM -> plot_bert_blstm.py
+
+    # # = EXPRESSION = -> y axis (-0.2, 2.2)
+    # # Figure - RBD Expression w/ ESM
+    # # - FCN
+    # csv_file = os.path.join(results_dir, "fcn/fcn-esm_dms_expression-2023-12-19_15-53/fcn-esm_dms_expression-2023-12-19_15-53_train_93005_test_23252_metrics_per.csv")
+    # history_df = pd.read_csv(csv_file, sep=',', header=0)
+    # save_as = csv_file.replace("_metrics_per.csv", "")
+    # plot_rmse_history(history_df, save_as)
+    # # - GCN
+    # csv_file = os.path.join(results_dir, "graphsage/graphsage-esm_dms_expression-2023-12-20_08-48/graphsage-esm_dms_expression-2023-12-20_08-48_train_93005_test_23252_metrics_per.csv")
+    # history_df = pd.read_csv(csv_file, sep=',', header=0)
+    # save_as = csv_file.replace("_metrics_per.csv", "")
+    # plot_rmse_history(history_df, save_as)
+    # # - BLSTM
+    # csv_file = os.path.join(results_dir, "blstm/blstm-esm_dms_expression-2023-12-07_13-58/blstm-esm_dms_expression-2023-12-07_13-58_train_93005_test_23252_metrics_per.csv")
+    # history_df = pd.read_csv(csv_file, sep=',', header=0)
+    # save_as = csv_file.replace("_metrics_per.csv", "")
+    # plot_rmse_history(history_df, save_as)
+    # # - ESM-BLSTM 
+    # csv_file = os.path.join(results_dir, "esm-blstm/esm-blstm-esm_dms_expression-2023-12-12_16-58/esm-blstm-esm_dms_expression-2023-12-12_16-58_train_93005_test_23252_metrics_per.csv")
+    # history_df = pd.read_csv(csv_file, sep=',', header=0)
+    # save_as = csv_file.replace("_metrics_per.csv", "")
+    # plot_rmse_history(history_df, save_as)    
+    # # - BERT-BLSTM_ESM -> plot_bert_blstm.py
+
+    # # Figure - RBD Expression w/ RBD Learned
+    # # - FCN
+    # csv_file = os.path.join(results_dir, "fcn/fcn-rbd_learned_320_dms_expression-2023-12-20_12-02/fcn-rbd_learned_320_dms_expression-2023-12-20_12-02_train_93005_test_23252_metrics_per.csv")
+    # history_df = pd.read_csv(csv_file, sep=',', header=0)
+    # save_as = csv_file.replace("_metrics_per.csv", "")
+    # plot_rmse_history(history_df, save_as)
+    # # - GCN
+    # csv_file = os.path.join(results_dir, "graphsage/graphsage-rbd_learned_320_dms_expression-2023-12-25_00-54/graphsage-rbd_learned_320_dms_expression-2023-12-25_00-54_train_93005_test_23252_metrics_per.csv")
+    # history_df = pd.read_csv(csv_file, sep=',', header=0)
+    # save_as = csv_file.replace("_metrics_per.csv", "")
+    # plot_rmse_history(history_df, save_as)
+    # # - BLSTM 
+    # csv_file = os.path.join(results_dir, "blstm/blstm-rbd_learned_320_dms_expression-2024-01-04_14-15/blstm-rbd_learned_320_dms_expression-2024-01-04_14-15_train_93005_test_23252_metrics_per.csv")
+    # history_df = pd.read_csv(csv_file, sep=',', header=0)
+    # save_as = csv_file.replace("_metrics_per.csv", "")
+    # plot_rmse_history(history_df, save_as)
+    # # - BERT-BLSTM -> plot_bert_blstm.py

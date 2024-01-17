@@ -33,11 +33,11 @@ from pnlp.embedding.tokenizer import ProteinTokenizer, token_to_index, index_to_
 from pnlp.embedding.nlp_embedding import NLPEmbedding
 from pnlp.model.language import ProteinLM
 from pnlp.model.bert import BERT
-from pnlp.plots import plot_run, plot_accuracy_stats
 import torch.distributed as dist
 from torch.utils.data.distributed import DistributedSampler
 from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.distributed.elastic.multiprocessing.errors import record
+from runner_util import plot_run
 
 logger = logging.getLogger(__name__)
 
@@ -82,6 +82,7 @@ class Model_Runner():
                  save: bool,                  # If model will be saved.
                  load_model: bool,
                  checkpoint: bool,
+                 save_as:str,
                  device: int,                 # Device is a gpu, specifically its rank designation
 
                  vocab_size: int,
@@ -99,12 +100,7 @@ class Model_Runner():
                  warmup_steps: int= 10000):
 
         if save:
-            # Create the file name
-            now = datetime.datetime.now()
-            date_hour_minute = now.strftime("%Y-%m-%d_%H-%M")
-            ddp_date_hour_minute = ''.join(['ddp-', date_hour_minute])
-            save_path = os.path.join(os.path.dirname(__file__), f'../../../results/ddp_runner/{ddp_date_hour_minute}')
-            self.save_as = os.path.join(save_path, ddp_date_hour_minute)
+            self.save_as = save_as
         
         self.device = device
         self.vocab_size = vocab_size
@@ -174,7 +170,7 @@ class Model_Runner():
                 WRITE = True
                 
                 if not self.checkpoint:
-                    fh.write('epoch, train_loss, train_accuracy, test_loss, test_accuracy\n')
+                    fh.write('epoch,train_loss,train_accuracy,test_loss,test_accuracy\n')
                     fh.flush() # flush line buffer
                 else:
                     # Load the saved data into new .csv from the loaded model 
@@ -216,7 +212,7 @@ class Model_Runner():
                     dist.all_gather_object(preds, self.aa_pred_counter) 
                     
                     if self.device == 0:
-                        fh.write(f"{epoch}, {metrics['train_loss']:.2f}, {metrics['train_accuracy']:.2f}, test_loss: {metrics['test_loss']:.2f}, test_accuracy: {metrics['test_accuracy']:.2f}\n")
+                        fh.write(f"{epoch},{metrics['train_loss']:.2f},{metrics['train_accuracy']:.2f},{metrics['test_loss']:.2f},{metrics['test_accuracy']:.2f}\n")
                         fh.flush()
 
                         # Add values to tracker dict from across processes counter dicts
@@ -251,7 +247,7 @@ class Model_Runner():
 
         if WRITE:
             if self.device==0: 
-                plot_run.plot_run(self.run_result_csv, save=True)
+                plot_run(self.run_result_csv, save=True)
                 logger.info(f'Run result saved to {os.path.basename(self.run_result_csv)}')
 
                 # Write to csv, plot
@@ -290,8 +286,7 @@ class Model_Runner():
                 break
 
             seq_ids, seqs = batch_data
-            tokenized_seqs = self.tokenizer(seqs)
-            tokenized_seqs = tokenized_seqs.to(self.device)  # input tokens with masks
+            tokenized_seqs = self.tokenizer(seqs).to(self.device)  # input tokens with masks
             labels = self.tokenizer._batch_pad(seqs).to(self.device)  # input tokens without masks
 
             if mode == 'train':  # train mode
@@ -414,14 +409,19 @@ def main():
             GPU limited by batch size, too high will have CUDA OOM. This script updated for gpu only to avoid device assignment issues
             and avoid saving/loading between cpu and gpu devices.
     """
+    # Data/results directories
+    result_tag = 'original_ddp_runner'
+    data_dir = os.path.join(os.path.dirname(__file__), f'../../../data')
+    results_dir = os.path.join(os.path.dirname(__file__), f'../../../results/run_results/ddp_runner')
+    
+    # Create run directory for results
     now = datetime.datetime.now()
     date_hour_minute = now.strftime("%Y-%m-%d_%H-%M")
-    results_dir = os.path.join(os.path.join(os.path.dirname(__file__), '../../../results/ddp_runner'))
-    run_dir = os.path.join(results_dir, f'ddp-{date_hour_minute}')
+    run_dir = os.path.join(results_dir, f"{result_tag}-{date_hour_minute}")
     os.makedirs(run_dir, exist_ok = True)
 
     # Add logging configuration
-    log_file = os.path.join(run_dir, f'ddp-{date_hour_minute}.log')
+    log_file = os.path.join(run_dir, f'{date_hour_minute}.log')
     logging.basicConfig(
         filename = log_file,
         format = '%(asctime)s - %(levelname)s - %(message)s',
@@ -444,12 +444,12 @@ def main():
     test_dataset = SeqDataset(db_file, "test")
 
     ## -=HYPERPARAMETERS=- ##
-    embedding_dim = 320 # 768
+    embedding_dim = 24 # 320, 768
     dropout=0.1
     max_len = 280
     mask_prob = 0.15
     n_transformer_layers = 12
-    attn_heads = 10 # 12
+    attn_heads = 12 # 10, 12
     hidden = embedding_dim
 
     batch_size = 64
@@ -465,9 +465,9 @@ def main():
     embedder = NLPEmbedding(embedding_dim, max_len,dropout)
     vocab_size = len(token_to_index)
 
-    SAVE_MODEL = True
-    LOAD_MODEL = False
-    CHECKPOINT = False
+    SAVE_MODEL = True # Save model weights
+    LOAD_MODEL = False # Load from saved weights (such as to make the heatmaps), set model_pth
+    CHECKPOINT = False # Load from checkpoint, continue running, set model_pth
     model_pth=''
 
     # Distributed Samplers
@@ -480,7 +480,8 @@ def main():
     test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False, drop_last=False, sampler=test_sampler)
 
     # Initialize model runner
-    runner = Model_Runner(SAVE_MODEL, LOAD_MODEL, CHECKPOINT, 
+    model_result = os.path.join(run_dir, f"{result_tag}-{date_hour_minute}_train_{len(train_dataset)}_test_{len(test_dataset)}")
+    runner = Model_Runner(SAVE_MODEL, LOAD_MODEL, CHECKPOINT, model_result,
                           vocab_size=vocab_size, embedding_dim=embedding_dim, dropout=dropout, 
                           max_len=max_len, mask_prob=mask_prob, n_transformer_layers=n_transformer_layers,
                           n_attn_heads=attn_heads, batch_size=batch_size, lr=lr, betas=betas,

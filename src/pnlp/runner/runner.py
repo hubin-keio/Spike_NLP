@@ -21,10 +21,10 @@ from pnlp.embedding.tokenizer import ProteinTokenizer, token_to_index, index_to_
 from pnlp.embedding.nlp_embedding import NLPEmbedding
 from pnlp.model.language import ProteinLM
 from pnlp.model.bert import BERT
-from pnlp.plots import plot_run #plot_accuracy_stats
+from runner_util import plot_run
 
-sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
-import plots.plot_heatmap 
+sys.path.append(os.path.join(os.path.dirname(__file__), '../../../results'))
+from plot_scripts.plot_heatmap import plot_aa_perc_pred_stats_heatmap
 
 logger = logging.getLogger(__name__)
 
@@ -153,7 +153,7 @@ class Model_Runner:
                 WRITE = True
                 
                 if not self.checkpoint:
-                    fh.write('epoch, train_loss, train_accuracy, test_loss, test_accuracy\n')
+                    fh.write('epoch,train_loss,train_accuracy,test_loss,test_accuracy\n')
                     fh.flush() # flush line buffer
                 else:
                     # Load the saved data into new .csv from the loaded model 
@@ -175,7 +175,7 @@ class Model_Runner:
                     train_loss, train_accuracy = self.epoch_iteration(epoch, max_batch, train_data, mode='train')
                     test_loss, test_accuracy = self.epoch_iteration(epoch, max_batch, test_data, mode='test')
 
-                    fh.write(f'{epoch}, {train_loss:.2f}, {train_accuracy:.2f}, {test_loss:.2f}, {test_accuracy:.2f}\n')
+                    fh.write(f'{epoch},{train_loss:.2f},{train_accuracy:.2f},{test_loss:.2f},{test_accuracy:.2f}\n')
                     fh.flush()
 
                     for key in self.aa_pred_counter:
@@ -204,7 +204,7 @@ class Model_Runner:
                     logger.info(f'\t{msg}')
 
         if WRITE:
-            plot_run.plot_run(self.run_result_csv, save=True)
+            plot_run(self.run_result_csv, save=True)
             logger.info(f'Run result saved to {os.path.basename(self.run_result_csv)}')
 
             # Write to csv, plot
@@ -222,7 +222,7 @@ class Model_Runner:
 
             if self.load_model and num_epochs == 1:
                 # Run heatmap after loading in best weights file & running over full dataset once
-                plots.plot_heatmap.plot_aa_perc_pred_stats_heatmap(self.aa_preds_tracker, self.run_preds_csv, save=True)
+                plot_aa_perc_pred_stats_heatmap(self.aa_preds_tracker, self.run_preds_csv, save=True)
 
     def epoch_iteration(self, num_epochs: int, max_batch: int, data_loader, mode:str):
         """
@@ -361,7 +361,7 @@ class Model_Runner:
 if __name__=="__main__":
 
     # Data/results directories
-    result_tag = 'original_runner' # specify expression or binding
+    result_tag = 'original_runner'
     data_dir = os.path.join(os.path.dirname(__file__), f'../../../data')
     results_dir = os.path.join(os.path.dirname(__file__), f'../../../results/run_results/runner')
     
@@ -386,12 +386,12 @@ if __name__=="__main__":
     test_dataset = SeqDataset(db_file, "test")
 
     # -= HYPERPARAMETERS =-
-    embedding_dim = 768 # 320
+    embedding_dim = 24 # 768, 320
     dropout = 0.1
     max_len = 280
     mask_prob = 0.15
     n_transformer_layers = 12
-    attn_heads = 12 # 10
+    attn_heads = 12 # 12, 10
     hidden = embedding_dim
 
     batch_size = 64
@@ -410,8 +410,9 @@ if __name__=="__main__":
     SAVE_MODEL = True
     LOAD_MODEL = True
     CHECKPOINT = False
-    #model_pth = os.path.join(results_dir, '../ddp_runner/ddp-2023-10-06_20-16/ddp-2023-10-06_20-16_best_model_weights.pth') # 320
-    model_pth = os.path.join(results_dir, '../ddp_runner/ddp-2023-08-16_08-41/ddp-2023-08-16_08-41_best_model_weights.pth') # 768
+    model_pth = os.path.join(results_dir, '../ddp_runner/original_ddp_runner-2024-01-08_01-14/original_ddp_runner-2024-01-08_01-14_train_278299_test_69325_best_model_weights.pth') # 24
+    # model_pth = os.path.join(results_dir, '../ddp_runner/ddp-2023-10-06_20-16/ddp-2023-10-06_20-16_best_model_weights.pth') # 320
+    # model_pth = os.path.join(results_dir, '../ddp_runner/ddp-2023-08-16_08-41/ddp-2023-08-16_08-41_best_model_weights.pth') # 768
 
     USE_GPU = True
     device = torch.device("cuda:0" if torch.cuda.is_available() and USE_GPU else "cpu")

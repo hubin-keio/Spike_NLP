@@ -149,22 +149,6 @@ def epoch_iteration(model, tokenizer, regression_loss_fn, masked_language_loss_f
 
     mlm_accuracy = correct_predictions / total_masked
     return mlm_accuracy, total_mlm_loss, total_blstm_loss, total_combined_loss
-
-def calc_train_test_history(metrics_csv: str, n_train: int, n_test: int, save_as: str):
-    """ Calculate the average mse per item and rmse """
-
-    history_df = pd.read_csv(metrics_csv, sep=',', header=0)
-
-    history_df['train_blstm_loss_per'] = history_df['train_blstm_loss']/n_train  # average mse per item
-    history_df['test_blstm_loss_per'] = history_df['test_blstm_loss']/n_test
-
-    history_df['train_blstm_rmse_per'] = np.sqrt(history_df['train_blstm_loss_per'].values)  # rmse
-    history_df['test_blstm_rmse_per'] = np.sqrt(history_df['test_blstm_loss_per'].values)
-
-    history_df.to_csv(metrics_csv.replace('.csv', '_per.csv'), index=False)
-    plot_mlm_history(history_df, save_as)
-    plot_rmse_history(history_df, save_as)
-    plot_combined_history(history_df, save_as)
  
 if __name__=='__main__':
 
@@ -180,9 +164,9 @@ if __name__=='__main__':
     os.makedirs(run_dir, exist_ok = True)
 
     # Load in data
-    # dms_train_csv = os.path.join(data_dir, 'dms_mutation_expression_meanFs_train.csv') # expression
+    # dms_train_csv = os.path.join(data_dir, 'dms_mutation_expression_meanFs_train.csv') # bert_blstm-dms_expression
     # dms_test_csv = os.path.join(data_dir, 'dms_mutation_expression_meanFs_test.csv') 
-    dms_train_csv = os.path.join(data_dir, 'dms_mutation_binding_Kds_train.csv') # binding
+    dms_train_csv = os.path.join(data_dir, 'dms_mutation_binding_Kds_train.csv') # bert_blstm-dms_binding
     dms_test_csv = os.path.join(data_dir, 'dms_mutation_binding_Kds_test.csv') 
     train_dataset = DMSDataset(dms_train_csv)
     test_dataset = DMSDataset(dms_test_csv)

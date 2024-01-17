@@ -1,9 +1,8 @@
 #!/usr/bin/env python
 """
-Model runner for bert_blstm.py
+Model runner for bert_blstm.py initialized with ESM embeddings.
 
 TODO: 
-- Move plotting functions to another file for cleanup
 - Add blstm and bert_blstm to pnlp module? To avoid sys pathing hack
 """
 
@@ -74,7 +73,12 @@ def run_model(model, tokenizer, train_set, test_set, n_epochs: int, batch_size: 
     metrics_csv = save_as + "_metrics.csv"
 
     with open(metrics_csv, "w") as fh:
-        fh.write(f"epoch,train_mlm_accuracy,test_mlm_accuracy,train_mlm_loss,test_mlm_loss,train_blstm_loss,test_blstm_loss,train_combined_loss,test_combined_loss\n")
+        fh.write(f"epoch,"
+                 f"train_mlm_accuracy,test_mlm_accuracy,"
+                 f"train_mlm_loss,test_mlm_loss,"
+                 f"train_blstm_loss,test_blstm_loss,"
+                 f"train_combined_loss,test_combined_loss\n")
+
         for epoch in range(1, n_epochs + 1):
             train_mlm_accuracy, train_mlm_loss, train_blstm_loss, train_combined_loss = epoch_iteration(model, tokenizer, regression_loss_fn, masked_language_loss_fn, optimizer, train_loader, epoch, max_batch, alpha, device, mode='train')
             test_mlm_accuracy, test_mlm_loss, test_blstm_loss, test_combined_loss = epoch_iteration(model, tokenizer, regression_loss_fn, masked_language_loss_fn, optimizer, test_loader, epoch, max_batch, alpha, device, mode='test')
@@ -84,10 +88,14 @@ def run_model(model, tokenizer, train_set, test_set, n_epochs: int, batch_size: 
                   f'{" "*(len(str(epoch))+7)}| Train BLSTM Loss: {train_blstm_loss:.4f}, Test BLSTM Loss: {test_blstm_loss:.4f}\n'
                   f'{" "*(len(str(epoch))+7)}| Train Combined Loss: {train_combined_loss:.4f}, Test Combined Loss: {test_combined_loss:.4f}\n')
             
-            fh.write(f"{epoch},{train_mlm_accuracy},{test_mlm_accuracy},{train_mlm_loss},{test_mlm_loss},{train_blstm_loss},{test_blstm_loss},{train_combined_loss},{test_combined_loss}\n")
+            fh.write(f"{epoch},"
+                     f"{train_mlm_accuracy},{test_mlm_accuracy},"
+                     f"{train_mlm_loss},{test_mlm_loss},"
+                     f"{train_blstm_loss},{test_blstm_loss},"
+                     f"{train_combined_loss},{test_combined_loss}\n")
             fh.flush()
             
-            save_model(model, optimizer, epoch, save_as + '.model_save')    
+            save_model(model, optimizer, epoch, save_as + '.model_save')     
 
     return metrics_csv
 
@@ -145,126 +153,22 @@ def epoch_iteration(model, tokenizer, regression_loss_fn, masked_language_loss_f
     mlm_accuracy = correct_predictions / total_masked
     return mlm_accuracy, total_mlm_loss, total_blstm_loss, total_combined_loss
 
-def calc_train_test_history(metrics_csv: str, n_train: int, n_test: int, save_as: str):
-    """ Calculate the average mse per item and rmse """
+def create_esm_embedding(embedding_dim:int, embedding_file_name:str):
+    """
+    Map our tokenizer tokens used for NLP embedding and BERT to
+    Huggingface AutoTokenizer tokens and their corresponding embedding
+    weights in the ESM model. Then create an embedding file (.pth) to 
+    be utilized as pretrained embedding weights for loading into the BERT model.
 
-    history_df = pd.read_csv(metrics_csv, sep=',', header=0)
+    Inputs:
+    - Embedding dimension that is the same embedding dimension to be used for
+        the BERT model (MUST be the SAME)
+    - Embedding file name to be saved as, recommended to be descriptive on the embedding dim:
+        ex: esm_embeddings_{embedding_dim}_dim.pth
 
-    history_df['train_blstm_loss_per'] = history_df['train_blstm_loss']/n_train  # average mse per item
-    history_df['test_blstm_loss_per'] = history_df['test_blstm_loss']/n_test
-
-    history_df['train_blstm_rmse'] = np.sqrt(history_df['train_blstm_loss_per'].values)  # rmse
-    history_df['test_blstm_rmse'] = np.sqrt(history_df['test_blstm_loss_per'].values)
-
-    history_df.to_csv(save_as+'_metrics_per.csv', index=False)
-    plot_mlm_history(history_df, save_as)
-    plot_rmse_history(history_df, save_as)
-    plot_combined_history(history_df, save_as)
-
-def plot_combined_history(history_df: str, save_as):
-    '''
-    Generate a single figure with subplots for combined training loss
-    from the model run csv file.
-    '''
-    sns.set_theme()
-    sns.set_context('talk')
-    sns.set(style="darkgrid")
-    plt.ion()
-    fig, ax = plt.subplots(nrows=1, ncols=1, figsize=(8, 4))
-
-    # Plot Training Loss
-    train_loss_line = ax.plot(history_df['epoch'], history_df['train_combined_loss'], color='tab:orange', label='Train Loss')
-    test_loss_line = ax.plot(history_df['epoch'], history_df['test_combined_loss'],color='tab:blue', label='Test Loss')
-    ax.set_ylabel('Loss')
-    ax.set_xlabel('Epoch')
-    ax.legend(loc='upper right')
-
-    # Skipping every other y-axis tick mark
-    yticks = ax.get_yticks()
-    ax.set_yticks(yticks[::2])  # Keep every other tick
-
-    plt.style.use('ggplot')
-    plt.tight_layout()
-    plt.savefig(save_as+'_combined_loss.png', format='png')
-    plt.savefig(save_as+'_combined_loss.pdf', format='pdf')
-
-def plot_mlm_history(history_df: str, save_as):
-    '''
-    Generate a single figure with subplots for training loss and training accuracy
-    from the model run csv file.
-    '''
-    sns.set_theme()
-    sns.set_context('talk')
-    sns.set(style="darkgrid")
-    plt.ion()
-    fig, (ax1, ax2) = plt.subplots(nrows=2, ncols=1, figsize=(8, 8))
-
-    # Plot Training Loss
-    train_loss_line = ax1.plot(history_df['epoch'], history_df['train_mlm_loss'], color='tab:red', label='Train Loss')
-    test_loss_line = ax1.plot(history_df['epoch'], history_df['test_mlm_loss'],color='tab:orange', label='Test Loss')
-    ax1.set_ylabel('Loss')
-    ax1.legend(loc='upper right')
-
-    # Plot Training Accuracy
-    train_accuracy_line = ax2.plot(history_df['epoch'], history_df['train_mlm_accuracy'], color='tab:blue', label='Train Accuracy')
-    test_accuracy_line = ax2.plot(history_df['epoch'], history_df['test_mlm_accuracy'], color='tab:green', label='Test Accuracy')
-    ax2.set_xlabel('Epoch')
-    ax2.set_ylabel('Accuracy')
-    ax2.set_ylim(0, 1) 
-    ax2.legend(loc='upper right')
-
-    # Skipping every other y-axis tick mark
-    a1_yticks = ax1.get_yticks()
-    ax1.set_yticks(a1_yticks[::2])  # Keep every other tick
-
-    plt.style.use('ggplot')
-    plt.tight_layout()
-    plt.savefig(save_as+'_loss_acc.png', format='png')
-    plt.savefig(save_as+'_loss_acc.pdf', format='pdf')
-
-def plot_rmse_history(history_df, save_as: str):
-    """ Plot RMSE training and testing history per epoch. """
-    
-    sns.set_theme()
-    sns.set_context('talk')
-    sns.set(style="darkgrid")
-    plt.ion()
-    fig, ax = plt.subplots(figsize=(8, 4))
-
-    sns.lineplot(data=history_df, x=history_df.index, y='train_blstm_rmse', label='Train RMSE', color='tab:orange', ax=ax)
-    sns.lineplot(data=history_df, x=history_df.index, y='test_blstm_rmse', label='Test RMSE', color='tab:blue', ax=ax)
-    
-    # Skipping every other y-axis tick mark
-    ax_yticks = ax.get_yticks()
-    ax.set_yticks(ax_yticks[::2])  # Keep every other tick
-
-    ax.set(xlabel='Epoch', ylabel='Average RMSE Per Sample')
-    plt.style.use('ggplot')
-    plt.tight_layout()
-    plt.savefig(save_as + '_rmse.png', format='png')
-    plt.savefig(save_as + '_rmse.pdf', format='pdf') 
-
-if __name__=='__main__':
-
-    # Data/results directories
-    result_tag = 'bert_blstm_esm-dms_binding'
-    data_dir = os.path.join(os.path.dirname(__file__), f'../../../data')
-    results_dir = os.path.join(os.path.dirname(__file__), f'../../../results/run_results/bert_blstm_esm')
-    
-    # Create run directory for results
-    now = datetime.datetime.now()
-    date_hour_minute = now.strftime("%Y-%m-%d_%H-%M")
-    run_dir = os.path.join(results_dir, f"{result_tag}-{date_hour_minute}")
-    os.makedirs(run_dir, exist_ok = True)
-
-    # Load in data
-    # dms_train_csv = os.path.join(data_dir, 'dms_mutation_expression_meanFs_train.csv') # 'bert_blstm_esm-dms_expression'
-    # dms_test_csv = os.path.join(data_dir, 'dms_mutation_expression_meanFs_test.csv') 
-    dms_train_csv = os.path.join(data_dir, 'dms_mutation_binding_Kds_train.csv') # 'bert_blstm_esm-dms_binding'
-    dms_test_csv = os.path.join(data_dir, 'dms_mutation_binding_Kds_test.csv') 
-    train_dataset = DMSDataset(dms_train_csv)
-    test_dataset = DMSDataset(dms_test_csv)
-
+    Be sure to import from Huggingface:
+        from transformers import AutoTokenizer, EsmModel 
+    """
     # ESM input
     esm = EsmModel.from_pretrained("facebook/esm2_t6_8M_UR50D")
     esm_embeddings = esm.embeddings.word_embeddings.weight
@@ -290,6 +194,36 @@ if __name__=='__main__':
         elif token in special_token_mapping and special_token_mapping[token] in esm_tokens:
             esm_embedding_map[main_tokens[token]] = esm_embeddings[esm_tokens[special_token_mapping[token]]]
 
+    # Create a ESM embedding tensor that can be loaded into BERT 
+    vocab_size = len(esm_embedding_map.keys())
+    esm_embeddings = torch.zeros(vocab_size, embedding_dim)  # Initialize a tensor of zeros
+    for token, embedding in esm_embedding_map.items():
+        esm_embeddings[token] = embedding
+    torch.save(esm_embeddings, embedding_file)
+
+    return embedding_file
+
+if __name__=='__main__':
+
+    # Data/results directories
+    result_tag = 'bert_blstm_esm-dms_binding'
+    data_dir = os.path.join(os.path.dirname(__file__), f'../../../data')
+    results_dir = os.path.join(os.path.dirname(__file__), f'../../../results/run_results/bert_blstm_esm')
+    
+    # Create run directory for results
+    now = datetime.datetime.now()
+    date_hour_minute = now.strftime("%Y-%m-%d_%H-%M")
+    run_dir = os.path.join(results_dir, f"{result_tag}-{date_hour_minute}")
+    os.makedirs(run_dir, exist_ok = True)
+
+    # Load in data
+    # dms_train_csv = os.path.join(data_dir, 'dms_mutation_expression_meanFs_train.csv') # 'bert_blstm_esm-dms_expression'
+    # dms_test_csv = os.path.join(data_dir, 'dms_mutation_expression_meanFs_test.csv') 
+    dms_train_csv = os.path.join(data_dir, 'dms_mutation_binding_Kds_train.csv') # 'bert_blstm_esm-dms_binding'
+    dms_test_csv = os.path.join(data_dir, 'dms_mutation_binding_Kds_test.csv') 
+    train_dataset = DMSDataset(dms_train_csv)
+    test_dataset = DMSDataset(dms_test_csv)
+
     # BERT input
     max_len = 280
     mask_prob = 0.15
@@ -299,14 +233,10 @@ if __name__=='__main__':
     n_attn_heads = 10
     tokenizer = ProteinTokenizer(max_len, mask_prob)
 
-    # Create a ESM embedding tensor that can be loaded into BERT 
-    vocab_size = len(esm_embedding_map.keys())
-    esm_embeddings = torch.zeros(vocab_size, embedding_dim)  # Initialize a tensor of zeros
-    for token, embedding in esm_embedding_map.items():
-        esm_embeddings[token] = embedding
-    embedding_file = os.path.join(run_dir,'esm_embeddings_320_dim.pth')
-    torch.save(esm_embeddings, embedding_file)
-    
+    # Create and load esm embedding file to BERT model
+    embedding_file_name = os.path.join(run_dir, f'esm_embeddings_{embedding_dim}_dim.pth')
+    embedding_file = create_esm_embedding(embedding_dim, embedding_file_name)
+
     bert = BERT(embedding_dim, dropout, max_len, mask_prob, n_transformer_layers, n_attn_heads)
     bert.embedding.load_pretrained_embeddings(embedding_file, no_grad=False)
 
@@ -327,7 +257,7 @@ if __name__=='__main__':
     max_batch = -1
     alpha = 1
     lr = 1e-5
-    device = torch.device("cuda:1")
+    device = torch.device("cuda:0")
 
     # Run
     count_parameters(model)
