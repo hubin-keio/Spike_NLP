@@ -150,9 +150,9 @@ def plot_run(csv_name: str, save: bool = True):
 if __name__=='__main__':
 
     results_dir = os.path.join(os.path.dirname(__file__), f'../../../results/run_results')
-    plot_run(os.path.join(results_dir,"ddp_runner/original_ddp_runner-2024-01-08_01-14/original_ddp_runner-2024-01-08_01-14_train_278299_test_69325_results.csv"), True)
-    plot_run(os.path.join(results_dir,"ddp_runner/ddp-2023-08-16_08-41/ddp-2023-08-16_08-41_results.csv"), True)
-    plot_run(os.path.join(results_dir,"ddp_runner/ddp-2023-10-06_20-16/ddp-2023-10-06_20-16_results.csv"), True)
+    # plot_run(os.path.join(results_dir,"ddp_runner/original_ddp_runner-2024-01-08_01-14/original_ddp_runner-2024-01-08_01-14_train_278299_test_69325_results.csv"), True)
+    # plot_run(os.path.join(results_dir,"ddp_runner/ddp-2023-08-16_08-41/ddp-2023-08-16_08-41_results.csv"), True)
+    # plot_run(os.path.join(results_dir,"ddp_runner/ddp-2023-10-06_20-16/ddp-2023-10-06_20-16_results.csv"), True)
 
     # # = BINDING = -> y axis (-0.2, 3.2)
     # # Figure - RBD Binding w/ ESM 
