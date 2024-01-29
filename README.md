@@ -18,4 +18,4 @@ Use NLP to study the spike protein in SARS-CoV-2 virus.
 
 ## Minimal Use Cases
 
-##Citation
+## Citation
