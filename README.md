@@ -6,7 +6,7 @@ Use NLP to study the spike protein in SARS-CoV-2 virus.
 
 * [Quick Start](https://github.com/hubin-keio/Spike_NLP?tab=readme-ov-file#quick-start)
 
-* [Installation](https://github.com/hubin-keio/Spike_NLP?tab=readme-ov-file#how-to-install)
+  - [Installation](https://github.com/hubin-keio/Spike_NLP?tab=readme-ov-file#how-to-install)
 
 * [Minimal Use Cases](https://github.com/hubin-keio/Spike_NLP?tab=readme-ov-file#minimal-use-cases)
 
@@ -14,7 +14,8 @@ Use NLP to study the spike protein in SARS-CoV-2 virus.
 
 ## Purpose
 
-## How to Install
+## Quick Start
+### How to Install
 
 ## Minimal Use Cases
 
