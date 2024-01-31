@@ -142,7 +142,7 @@ if __name__=="__main__":
                         datefmt='%Y-%m-%d %H:%M:%S')
 
     logging.info(f"Init memory usage: {memory_usage()}")
-    pickle_file = '/Users/vli/Desktop/beta_cora/new_hibecovirus.pkl'
+    pickle_file = '/Users/vli/Desktop/beta_cora/betacoronavirus.pkl'
     logging.info(f"Using this pickle: {pickle_file}")
     
     print(f"Extracting embeddings")

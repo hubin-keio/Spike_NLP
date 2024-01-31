@@ -131,7 +131,7 @@ if __name__=='__main__':
     batch_size = 64
 
     # Data file
-    full_csv_file = "/Users/vli/Desktop/RBDs_aa.csv"
+    full_csv_file = "/data/spike_ml/valerie/Spike_NLP/data/betacoronavirus_seq.csv"
     full_seq_dataset = RBDVariantDataset(full_csv_file, device)
     torch.manual_seed(0)
     full_seq_loader = DataLoader(full_seq_dataset, batch_size=batch_size, shuffle=True, drop_last=False)
@@ -148,5 +148,5 @@ if __name__=='__main__':
     fcn_hidden_size = 320
     model = BLSTM(lstm_input_size, lstm_hidden_size, lstm_num_layers, lstm_bidrectional, fcn_hidden_size, device).to(device)
 
-    save_as = full_csv_file.replace(".csv", "new_hibecovirus.pkl")
+    save_as = full_csv_file.replace(".csv", "betacoronavirus.pkl")
     run_model(model, tokenizer, embedder, full_seq_loader, batch_size, device, save_as)
