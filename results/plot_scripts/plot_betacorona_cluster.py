@@ -20,7 +20,7 @@ from sklearn.manifold import TSNE
 from contextlib import redirect_stdout
 from tqdm import tqdm
 from PIL import Image
-from adjustText import adjust_text
+# from adjustText import adjust_text
 
 logger = logging.getLogger(__name__)
 
@@ -106,7 +106,7 @@ def plot_tsne(save_as, embedding_matrix, all_types, type_labels, all_hosts, host
     for host_marker in set(markers):
         indices = [i for i, marker in enumerate(markers) if marker == host_marker]
         plt.scatter(tsne_embeddings[indices, 0], tsne_embeddings[indices, 1], c=[colors[i] for i in indices],
-                    s=85, edgecolor='w', alpha=0.6, marker=host_marker, label=host_marker)
+                    s=75, edgecolor='w', alpha=0.9, marker=host_marker, label=host_marker)
                     
         # Add labels for each point with type, host, and ID
 #        for i in indices:
@@ -120,8 +120,8 @@ def plot_tsne(save_as, embedding_matrix, all_types, type_labels, all_hosts, host
     plt.legend(handles=legend_handles, loc='lower right')
 
     ax = plt.gca()
-    ax.xaxis.set_major_locator(MultipleLocator(100))  # Set to 2 for every other tick
-    ax.yaxis.set_major_locator(MultipleLocator(80))  # Set to 2 for every other tick
+    ax.xaxis.set_major_locator(MultipleLocator(50))  # Set to 2 for every other tick
+    ax.yaxis.set_major_locator(MultipleLocator(50))  # Set to 2 for every other tick
 
     plt.tight_layout()
     plt.savefig(save_as + ".pdf", format="pdf")
@@ -131,7 +131,7 @@ if __name__=="__main__":
 
     now = datetime.datetime.now()
     date_hour_minute = now.strftime("%Y-%m-%d_%H-%M")
-    run_dir = '/Users/vli/Desktop/beta_cora/results'
+    run_dir = '/data/spike_ml/valerie/Spike_NLP/results/plots/Betacoronavirus'
     os.makedirs(run_dir, exist_ok = True)
 
     # Add logging configuration
@@ -142,7 +142,7 @@ if __name__=="__main__":
                         datefmt='%Y-%m-%d %H:%M:%S')
 
     logging.info(f"Init memory usage: {memory_usage()}")
-    pickle_file = '/Users/vli/Desktop/beta_cora/betacoronavirus.pkl'
+    pickle_file = '/data/spike_ml/valerie/Spike_NLP/data/betacoronavirus_seq.pkl'
     logging.info(f"Using this pickle: {pickle_file}")
     
     print(f"Extracting embeddings")
