@@ -2,24 +2,19 @@
 """ DMS Dataset Embedder """
 
 import os
-import re
 import sys
 import torch
 import pickle
-import numpy as np
 import pandas as pd
 import torch.nn as nn
 from transformers import AutoTokenizer, EsmModel 
-from torch.nn.utils.rnn import pad_sequence
-from torch.utils.data import Dataset, random_split
-from collections import OrderedDict
+from torch.utils.data import Dataset
 from pnlp.embedding.tokenizer import ProteinTokenizer
 from pnlp.embedding.nlp_embedding import NLPEmbedding
-from pnlp.model.language import ProteinLM
 from pnlp.model.bert import BERT
 
 class DMS_Dataset(Dataset):
-    """ Binding Dataset """
+    """ For Binding and Expression DMS datasets. """
     
     def __init__(self, csv_file:str, model_pth:str, device: str, embed_method:str):
         """
@@ -172,8 +167,9 @@ def load_nlp_embedder(model_pth):
     state_dict = saved_state['model_state_dict']
 
     # For loading from ddp models, they have 'module.' in keys of state_dict
-    prefix = 'module.'
-    state_dict = {i[len(prefix):]: j for i, j in state_dict.items() if prefix in i[:len(prefix)]}
+    if 'ddp' in model_pth:
+        prefix = 'module.'
+        state_dict = {i[len(prefix):]: j for i, j in state_dict.items() if prefix in i[:len(prefix)]}
 
     # Embedder set up
     max_len = 280

@@ -1,16 +1,15 @@
 #!/usr/bin/env python
 
-import os
 import pandas as pd
 import numpy as np
 import seaborn as sns
 import matplotlib.pyplot as plt
 
 def plot_combined_history(history_df: str, save_as):
-    '''
+    """
     Generate a single figure with subplots for combined training loss
     from the model run csv file.
-    '''
+    """
     sns.set_theme()
     sns.set_context('talk')
     sns.set(style="darkgrid")
@@ -33,10 +32,10 @@ def plot_combined_history(history_df: str, save_as):
     plt.savefig(save_as+'_combined_loss.pdf', format='pdf')
 
 def plot_mlm_history(history_df: str, save_as):
-    '''
+    """
     Generate a single figure with subplots for training loss and training accuracy
     from the model run csv file.
-    '''
+    """
     sns.set_theme()
     sns.set_context('talk')
     sns.set(style="darkgrid")
@@ -123,10 +122,11 @@ def plot_all_loss_history(history_df, save_as:str):
     sns.lineplot(data=history_df, x=history_df.index, y='test_combined_loss', label='Test Combined Error', color=palette[8], linewidth=2, ax=ax)
     sns.lineplot(data=history_df, x=history_df.index, y='train_combined_loss', label='Train Combined Error', color=palette[9], linewidth=2, ax=ax)
 
-    ax.set_xlim(-10, 500)
+    ax.set_xlim(-100, 5000)
     ax_yticks = ax.get_yticks()
     ax.set_yticks(ax_yticks[::2])  # Keep every other tick
     ax.tick_params(axis='both', which='major', labelsize=fontsize)
+    ax.yaxis.get_offset_text().set_fontsize(fontsize) 
 
     ax.legend(fontsize=fontsize)
     ax.set_xlabel('Epoch', fontsize=fontsize)
@@ -151,42 +151,3 @@ def calc_train_test_history(metrics_csv: str, n_train: int, n_test: int, save_as
     plot_mlm_history(history_df, save_as)
     plot_rmse_history(history_df, save_as)
     plot_combined_history(history_df, save_as)
- 
-if __name__=='__main__':
-    # Data/results directories for bert_blstm
-    # = Binding =
-    data_dir = os.path.join(os.path.dirname(__file__), '../run_results/bert_blstm')
-    # csv_file = os.path.join(data_dir, 'bert_blstm-dms_binding-2023-11-22_23-03/bert_blstm-dms_binding-2023-11-22_23-03_train_84420_test_21105_metrics_per.csv')
-    # history_df = pd.read_csv(csv_file, sep=',', header=0)
-    # save_as = csv_file.replace("_metrics_per.csv", "")
-    # plot_mlm_history(history_df, save_as)
-    # plot_rmse_history(history_df, save_as)
-    # plot_combined_history(history_df, save_as)
-    # plot_all_loss_history(history_df, save_as)
-    # = Expression =
-    csv_file = os.path.join(data_dir, 'bert_blstm-dms_expression-2023-11-22_23-05/bert_blstm-dms_expression-2023-11-22_23-05_train_93005_test_23252_metrics_per.csv')
-    history_df = pd.read_csv(csv_file, sep=',', header=0)
-    save_as = csv_file.replace("_metrics_per.csv", "")
-    plot_mlm_history(history_df, save_as)
-    plot_rmse_history(history_df, save_as)
-    plot_combined_history(history_df, save_as)
-    plot_all_loss_history(history_df, save_as)
-
-    # Data/results directories for bert_blstm_esm
-    # = Binding =
-    data_dir = os.path.join(os.path.dirname(__file__), '../run_results/bert_blstm_esm')
-    # csv_file = os.path.join(data_dir, 'bert_blstm_esm-dms_binding-2023-12-23_21-54/bert_blstm_esm-dms_binding-2023-12-23_21-54_train_84420_test_21105_metrics_per.csv')
-    # history_df = pd.read_csv(csv_file, sep=',', header=0)
-    # save_as = csv_file.replace("_metrics_per.csv", "")
-    # plot_mlm_history(history_df, save_as)
-    # plot_rmse_history(history_df, save_as)
-    # plot_combined_history(history_df, save_as)
-    # plot_all_loss_history(history_df, save_as)
-    # = Expression =
-    csv_file = os.path.join(data_dir, 'bert_blstm_esm-dms_expression-2023-12-23_21-45/bert_blstm_esm-dms_expression-2023-12-23_21-45_train_93005_test_23252_metrics_per.csv')
-    history_df = pd.read_csv(csv_file, sep=',', header=0)
-    save_as = csv_file.replace("_metrics_per.csv", "")
-    plot_mlm_history(history_df, save_as)
-    plot_rmse_history(history_df, save_as)
-    plot_combined_history(history_df, save_as)
-    plot_all_loss_history(history_df, save_as)

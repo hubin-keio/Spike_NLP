@@ -4,7 +4,7 @@ import torch
 from torch import nn
 
 class BLSTM(nn.Module):
-    """ Bidirectional LSTM. """
+    """ Bidirectional LSTM with FCN layer. """
 
     def __init__(self,
                  lstm_input_size,    # The number of expected features.

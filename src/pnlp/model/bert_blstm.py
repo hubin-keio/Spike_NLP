@@ -6,7 +6,7 @@ from pnlp.model.language import ProteinMaskedLanguageModel, BERT
 from model.blstm import BLSTM
 
 class BERT_BLSTM(nn.Module):
-    """" BERT protein language model. """
+    """" BLSTM with FCN layer, MLM, and BERT. """
     
     def __init__(self, bert: BERT, blstm:BLSTM, vocab_size: int):
         super().__init__()
