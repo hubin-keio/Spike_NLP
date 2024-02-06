@@ -9,15 +9,11 @@ import logging
 import pickle
 import psutil
 import umap
-import umap.plot
 import numpy as np
 import pandas as pd
 import seaborn as sns
 import matplotlib.pyplot as plt
 from sklearn.manifold import TSNE
-from contextlib import redirect_stdout
-from tqdm import tqdm
-from PIL import Image
 
 logger = logging.getLogger(__name__)
 
@@ -39,6 +35,7 @@ def extract_embedding_pickle(pickle_file:str):
     df = pd.DataFrame({"seq_id": pkl_seq_ids,
                        "variant": pkl_variants,
                        "embedding": pkl_embeddings})
+    
     return df
 
 def generate_umap_embedding(save_as, info_df, embedding_matrix, rnd_seed) -> str:    
@@ -108,51 +105,40 @@ def plot_from_embedding(csv_file, type):
 
 if __name__=="__main__":
 
-    # now = datetime.datetime.now()
-    # date_hour_minute = now.strftime("%Y-%m-%d_%H-%M")
-    # run_dir = os.path.join(os.path.dirname(__file__), f'../../../results/run_results/clustering/plot_alphaseq_cluster-{date_hour_minute}')
-    # os.makedirs(run_dir, exist_ok = True)
+    now = datetime.datetime.now()
+    date_hour_minute = now.strftime("%Y-%m-%d_%H-%M")
+    run_dir = os.path.join(os.path.dirname(__file__), f'../run_results/clustering/plot_alphaseq_cluster-{date_hour_minute}')
+    os.makedirs(run_dir, exist_ok = True)
 
-    # # Add logging configuration
-    # log_file = os.path.join(run_dir, 'memory-usage.log')
-    # logging.basicConfig(filename=log_file,
-    #                     level=logging.INFO,
-    #                     format='%(asctime)s - %(levelname)s - %(name)s - %(message)s',
-    #                     datefmt='%Y-%m-%d %H:%M:%S')
+    # Add logging configuration
+    log_file = os.path.join(run_dir, 'memory-usage.log')
+    logging.basicConfig(filename=log_file,
+                        level=logging.INFO,
+                        format='%(asctime)s - %(levelname)s - %(name)s - %(message)s',
+                        datefmt='%Y-%m-%d %H:%M:%S')
 
-    # logging.info(f"Init memory usage: {memory_usage()}")
-    # data_dir = os.path.join(os.path.dirname(__file__), '../../../data/pickles')
-    # pickle_file = os.path.join(data_dir, "clean_avg_alpha_seq_clustering_esm_blstm.pkl")
-    # base_filename = os.path.basename(pickle_file).replace('.pkl', '')
-    # save_as = os.path.join(run_dir, base_filename)
-    # logging.info(f"Using this pickle: {pickle_file}")
+    logging.info(f"Init memory usage: {memory_usage()}")
+    data_dir = os.path.join(os.path.dirname(__file__), '../../data/pickles')
+    pickle_file = os.path.join(data_dir, "clean_avg_alpha_seq_clustering_esm_blstm.pkl")
+    save_as = os.path.join(run_dir, os.path.basename(pickle_file).replace('.pkl', ''))
+    logging.info(f"Using this pickle: {pickle_file}")
     
-    # print(f"Extracting embeddings")
-    # logging.info(f"Pre embedding extraction memory usage: {memory_usage()}")
-    # all_data = extract_embedding_pickle(pickle_file)
-    # logging.info(f"Post embedding extraction memory usage: {memory_usage()}")
+    print(f"Extracting embeddings")
+    logging.info(f"Pre embedding extraction memory usage: {memory_usage()}")
+    all_data = extract_embedding_pickle(pickle_file)
+    embedding_matrix = np.vstack(all_data['embedding'])
+    info_df = all_data[["seq_id", "variant"]].copy().reset_index(drop=True)
+    logging.info(f"Post embedding extraction memory usage: {memory_usage()}")
 
-    # quantile_counts = all_data['variant'].value_counts()
-    # print(quantile_counts)
-
-    # embedding_matrix = np.vstack(all_data['embedding'])
-    # info_df = all_data[["seq_id", "variant"]].copy().reset_index(drop=True)
-
-    # print(f"Plotting 2D UMAP - All")
-    # logging.info(f"Pre 2D UMAP memory usage: {memory_usage()}")
-    # umap_csv = generate_umap_embedding(save_as, info_df, embedding_matrix, 0) # can also set rnd_seed here
-    # plot_from_embedding(umap_csv, 'UMAP')
-    # logging.info(f"2D UMAP memory usage: {memory_usage()}")
-
-    # print(f"Plotting T-SNE - All")
-    # logging.info(f"Pre T-SNE memory usage: {memory_usage()}")
-    # tsne_csv = generate_tsne_embedding(save_as, info_df, embedding_matrix, 0) # can also set rnd_seed here
-    # plot_from_embedding(tsne_csv, 'tSNE')
-    # logging.info(f"Post T-SNE memory usage: {memory_usage()}")
-
-
-    umap_csv = "/data/spike_ml/Spike_NLP_kaetlyn/results/clustering/plot_alphaseq_cluster-2023-12-18_17-30/clean_avg_alpha_seq_clustering_esm_blstm_umap_coordinates.csv"
-    tsne_csv = "/data/spike_ml/Spike_NLP_kaetlyn/results/clustering/plot_alphaseq_cluster-2023-12-18_17-30/clean_avg_alpha_seq_clustering_esm_blstm_tsne_coordinates.csv"
+    print(f"Plotting 2D UMAP - All")
+    logging.info(f"Pre 2D UMAP memory usage: {memory_usage()}")
+    umap_csv = generate_umap_embedding(save_as, info_df, embedding_matrix, 0) # can also set rnd_seed here
     plot_from_embedding(umap_csv, 'UMAP')
+    logging.info(f"2D UMAP memory usage: {memory_usage()}")
+
+    print(f"Plotting T-SNE - All")
+    logging.info(f"Pre T-SNE memory usage: {memory_usage()}")
+    tsne_csv = generate_tsne_embedding(save_as, info_df, embedding_matrix, 0) # can also set rnd_seed here
     plot_from_embedding(tsne_csv, 'tSNE')
+    logging.info(f"Post T-SNE memory usage: {memory_usage()}")
 

@@ -9,15 +9,11 @@ import logging
 import pickle
 import psutil
 import umap
-import umap.plot
 import numpy as np
 import pandas as pd
 import seaborn as sns
 import matplotlib.pyplot as plt
 from sklearn.manifold import TSNE
-from contextlib import redirect_stdout
-from tqdm import tqdm
-from PIL import Image
 
 logger = logging.getLogger(__name__)
 
@@ -149,7 +145,7 @@ def plot_12_embeddings(csv_files, type):
     Plots 12 UMAP or t-SNE subplots into a single plot from generated embeddings.
     """
     n_rows, n_cols = 3, 4
-    fig, axes = plt.subplots(n_rows, n_cols, figsize=(16*n_rows, 9*n_cols))
+    fig, axes = plt.subplots(n_rows, n_cols, figsize=(10*n_cols, 8*n_rows))
     plt.rcParams['font.family'] = 'sans-serif'
     axes = axes.flatten()
 
@@ -168,106 +164,113 @@ def plot_12_embeddings(csv_files, type):
 
         df['colors'] = [variant_colors[variant] for variant in df['variant']]
 
-        # Legend handles
-        legend_handles = [plt.Line2D([0], [0], marker='o', color='w', markerfacecolor=variant_colors[variant], label=variant) for variant in variant_labels]
-
         # Plot the UMAP embeddings on the subplot
         ax = axes[i]
         scatter = ax.scatter(df['DIM_1'], df['DIM_2'], c=df['colors'], s=40, edgecolor='w', alpha=0.5)
 
+        # Set x and y axis limits
+        if type == 'UMAP':
+            ax.set_xlim([-28, 35]) 
+            ax.set_ylim([-26, 40]) 
+        elif type == 'tSNE':
+            ax.set_xlim([-99, 99]) 
+            ax.set_ylim([-90, 100]) 
+
         # Set the font size for axes labels
         if i >= 8: 
-            ax.set_xlabel(f'{type} Dimension 1', fontsize=30)
+            ax.set_xlabel(f'{type} Dimension 1', fontsize=40)
         else:
             ax.set_xticklabels([])
 
         if i % 4 == 0:
-            ax.set_ylabel(f'{type} Dimension 2', fontsize=30)
+            ax.set_ylabel(f'{type} Dimension 2', fontsize=40)
         else:
             ax.set_yticklabels([])
 
-        ax.tick_params(axis='both', which='major', labelsize=30)
-        ax.legend(handles=legend_handles, loc='upper right', fontsize=22)
+        ax.tick_params(axis='both', which='major', labelsize=40)
 
+        # Legend handles
+        if i == 0:
+            legend_handles = [plt.Line2D([0], [0], marker='o', color='w', markersize=20, markerfacecolor=variant_colors[variant], label=variant) for variant in variant_labels]
+            ax.legend(handles=legend_handles, loc='upper left', fontsize=25)
+
+    plt.subplots_adjust(right=0.8)
     plt.tight_layout()
     plt.savefig(csv_files[0].replace(f"_iter0_{type.lower()}_coordinates.csv", f"_12iterations_{type.lower()}_plot.png"), dpi=300, format='png')
     plt.savefig(csv_files[0].replace(f"_iter0_{type.lower()}_coordinates.csv", f"_12iterations_{type.lower()}_plot.pdf"), format='pdf')
 
 if __name__=="__main__":
 
-    # now = datetime.datetime.now()
-    # date_hour_minute = now.strftime("%Y-%m-%d_%H-%M")
-    # run_dir = os.path.join(os.path.dirname(__file__), f'../../../results/run_results/clustering/plot_rbd_cluster-{date_hour_minute}')
-    # os.makedirs(run_dir, exist_ok = True)
+    now = datetime.datetime.now()
+    date_hour_minute = now.strftime("%Y-%m-%d_%H-%M")
+    run_dir = os.path.join(os.path.dirname(__file__), f'../run_results/clustering/plot_rbd_cluster-{date_hour_minute}')
+    os.makedirs(run_dir, exist_ok = True)
 
     # Add logging configuration
-    # log_file = os.path.join(run_dir, 'memory-usage.log')
-    # logging.basicConfig(filename=log_file,
-    #                     level=logging.INFO,
-    #                     format='%(asctime)s - %(levelname)s - %(name)s - %(message)s',
-    #                     datefmt='%Y-%m-%d %H:%M:%S')
+    log_file = os.path.join(run_dir, 'memory-usage.log')
+    logging.basicConfig(filename=log_file,
+                        level=logging.INFO,
+                        format='%(asctime)s - %(levelname)s - %(name)s - %(message)s',
+                        datefmt='%Y-%m-%d %H:%M:%S')
 
-    # logging.info(f"Init memory usage: {memory_usage()}")
-    # data_dir = os.path.join(os.path.dirname(__file__), '../../../data/pickles')
-    # pickle_file = os.path.join(data_dir, "spikeprot0528.clean.uniq.noX.RBD_variants_clustering_esm_blstm.pkl")
-    # pickle_file = os.path.join(data_dir, "spikeprot0528.clean.uniq.noX.RBD_variants_clustering_bert_blstm_dms_binding.pkl")
-    # pickle_file = os.path.join(data_dir, "spikeprot0528.clean.uniq.noX.RBD_variants_clustering_bert_blstm_dms_expression.pkl")
-    # pickle_file = os.path.join(data_dir, "spikeprot0528.clean.uniq.noX.RBD_variants_clustering_bert_blstm_esm.pkl")
-    # logging.info(f"Using this pickle: {pickle_file}")
+    logging.info(f"Init memory usage: {memory_usage()}")
+    data_dir = os.path.join(os.path.dirname(__file__), '../../data/pickles')
+    pickle_file = os.path.join(data_dir, "spikeprot0528.clean.uniq.noX.RBD_variants_clustering_esm_blstm.pkl")
+    logging.info(f"Using this pickle: {pickle_file}")
     
-    # print(f"Extracting embeddings")
-    # logging.info(f"Pre embedding extraction memory usage: {memory_usage()}")
-    # all_data = extract_embedding_pickle(pickle_file)
-    # logging.info(f"Post embedding extraction memory usage: {memory_usage()}")
+    print(f"Extracting embeddings")
+    logging.info(f"Pre embedding extraction memory usage: {memory_usage()}")
+    all_data = extract_embedding_pickle(pickle_file)
+    logging.info(f"Post embedding extraction memory usage: {memory_usage()}")
 
-    # # Whole dataset maps
-    # ado = True
-    # whole = True
-    # save_as, info_df, embedding_matrix = sample_embedding_pickle(run_dir, all_data, whole, ado, "whole")
+    # Whole dataset maps
+    ado = True
+    whole = True
+    save_as, info_df, embedding_matrix = sample_embedding_pickle(run_dir, all_data, whole, ado, "whole")
 
-    # print(f"Plotting 2D UMAP - All")
-    # logging.info(f"Pre 2D UMAP memory usage: {memory_usage()}")
-    # umap_csv = generate_umap_embedding(save_as, info_df, embedding_matrix, 0) # can also set rnd_seed here
-    # plot_from_embedding(umap_csv, 'UMAP')
-    # logging.info(f"2D UMAP memory usage: {memory_usage()}")
-
-    # print(f"Plotting T-SNE - All")
-    # logging.info(f"Pre T-SNE memory usage: {memory_usage()}")
-    # tsne_csv = generate_tsne_embedding(save_as, info_df, embedding_matrix, 0)
-    # plot_from_embedding(tsne_csv, 'tSNE')
-    # logging.info(f"Post T-SNE memory usage: {memory_usage()}")
-
-    # # Iteration maps
-    # ado = True
-    # whole = False
-
-    # for i in range(12):
-    #     rnd_seed = i  # Change the seed for each iteration to ensure different samples
-    #     save_as, info_df, embedding_matrix = sample_embedding_pickle(run_dir, all_data, whole, ado, str(i), rnd_seed)
-    #     print(info_df["variant"].value_counts())
-    #     save_as = save_as + f'_iter{i}'
-
-    #     print(f"Plotting 2D UMAP - Iteration {i}")
-    #     logging.info(f"Pre 2D UMAP memory usage: {memory_usage()}")
-    #     umap_csv = generate_umap_embedding(save_as, info_df, embedding_matrix, rnd_seed) # can also set rnd_seed here
-    #     plot_from_embedding(umap_csv, 'UMAP')
-    #     logging.info(f"2D UMAP memory usage: {memory_usage()}")
-
-    #     print(f"Plotting T-SNE - Iteration {i}")
-    #     logging.info(f"Pre T-SNE memory usage: {memory_usage()}")
-    #     tsne_csv = generate_tsne_embedding(save_as, info_df, embedding_matrix, rnd_seed)
-    #     plot_from_embedding(tsne_csv, 'tSNE')
-    #     logging.info(f"Post T-SNE memory usage: {memory_usage()}")
-
-    run_dir = os.path.join(os.path.dirname(__file__), f'../run_results/clustering/plot_cluster-2023-11-30_16-44')
-    umap_csv = os.path.join(run_dir, "RBD_variants_clustering_esm_blstm_umap_coordinates.csv")
-    tsne_csv = os.path.join(run_dir, "RBD_variants_clustering_esm_blstm_tsne_coordinates.csv")
+    print(f"Plotting 2D UMAP - All")
+    logging.info(f"Pre 2D UMAP memory usage: {memory_usage()}")
+    umap_csv = generate_umap_embedding(save_as, info_df, embedding_matrix, 0) # can also set rnd_seed here
     plot_from_embedding(umap_csv, 'UMAP')
+    logging.info(f"2D UMAP memory usage: {memory_usage()}")
+
+    print(f"Plotting T-SNE - All")
+    logging.info(f"Pre T-SNE memory usage: {memory_usage()}")
+    tsne_csv = generate_tsne_embedding(save_as, info_df, embedding_matrix, 0) # can also set rnd_seed here
     plot_from_embedding(tsne_csv, 'tSNE')
+    logging.info(f"Post T-SNE memory usage: {memory_usage()}")
 
-    umap_list = [os.path.join(run_dir, f"RBD_variants_clustering_esm_blstm_a22073_d21887_o22399_iter{i}_umap_coordinates.csv") for i in range(12)]
+    # Iterative downsampled dataset maps
+    ado = True
+    whole = False
+    iter_12 = False
+    umap_list = []
+    tsne_list = []
+
+    for i in range(12 if iter_12 else 1):
+        rnd_seed = i  # Change the seed for each iteration to ensure different samples
+        save_as, info_df, embedding_matrix = sample_embedding_pickle(run_dir, all_data, whole, ado, str(i), rnd_seed)
+        print(embedding_matrix.shape)
+        print(info_df["variant"].value_counts())
+        save_as = save_as + f'_iter{i}'
+
+        print(f"Plotting 2D UMAP - Iteration {i}")
+        logging.info(f"Pre 2D UMAP memory usage: {memory_usage()}")
+        umap_csv = generate_umap_embedding(save_as, info_df, embedding_matrix, rnd_seed) 
+        umap_list.append(umap_csv)
+        logging.info(f"2D UMAP memory usage: {memory_usage()}")
+
+        print(f"Plotting T-SNE - Iteration {i}")
+        logging.info(f"Pre T-SNE memory usage: {memory_usage()}")
+        tsne_csv = generate_tsne_embedding(save_as, info_df, embedding_matrix, rnd_seed)
+        tsne_list.append(tsne_csv)
+        logging.info(f"Post T-SNE memory usage: {memory_usage()}")
+
+if iter_12:
     plot_12_embeddings(umap_list, 'UMAP')
-    
-    tsne_list = [os.path.join(run_dir, f"RBD_variants_clustering_esm_blstm_a22073_d21887_o22399_iter{i}_tsne_coordinates.csv") for i in range(12)]
     plot_12_embeddings(tsne_list, 'tSNE')
+else:
+    plot_from_embedding(umap_list[0], 'UMAP')
+    plot_from_embedding(tsne_list[0], 'tSNE')
 
+    
