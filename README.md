@@ -8,7 +8,7 @@ Use NLP to study the spike protein in SARS-CoV-2 virus.
 
   - [Installation](https://github.com/hubin-keio/Spike_NLP?tab=readme-ov-file#how-to-install)
 
-* [Minimal Use Cases](https://github.com/hubin-keio/Spike_NLP?tab=readme-ov-file#minimal-use-cases)
+* [Usage](https://github.com/hubin-keio/Spike_NLP?tab=readme-ov-file#usage)
 
 * [Citation](https://github.com/hubin-keio/Spike_NLP?tab=readme-ov-file#citation)
 
@@ -16,7 +16,21 @@ Use NLP to study the spike protein in SARS-CoV-2 virus.
 
 ## Quick Start
 ### How to Install
+The pnlp module can be installed using `pip install -e .`. Additional dependencies can be found in *INSERT REQUIREMENTS.TXT etc.*
 
-## Minimal Use Cases
+Other requirements:
+- NVIDIA GPU
+
+## Usage
+We offer more in depth documentation located in the *LINK TO NOTEBOOKS FOLDER*, which we recommend reading for further understanding prior to usage of the models.
+
+### Running the NLP BERT Model
+#### Creating the Databases
+#### Executing
+
+### Transfer Learning
+#### Generating Pickles
+#### Executing Models with Pickles
+#### Executing Models without Pickles
 
 ## Citation
