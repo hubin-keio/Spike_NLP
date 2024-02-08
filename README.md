@@ -22,7 +22,7 @@ Other requirements:
 - NVIDIA GPU
 
 ## Usage
-We offer more in depth documentation located in the *LINK TO NOTEBOOKS FOLDER*, which we recommend reading for further understanding prior to usage of the models.
+We offer more in depth documentation located in the [notebooks](https://github.com/hubin-keio/Spike_NLP/tree/master/notebooks) folder, which we recommend reading for further understanding prior to usage of the models.
 
 ### Running the NLP BERT Model
 #### Creating the Databases
