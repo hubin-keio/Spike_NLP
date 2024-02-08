@@ -4,9 +4,7 @@ Use NLP to study the spike protein in SARS-CoV-2 virus.
 ## Table of Contents
 * [Purpose](https://github.com/hubin-keio/Spike_NLP?tab=readme-ov-file#purpose)
 
-* [Quick Start](https://github.com/hubin-keio/Spike_NLP?tab=readme-ov-file#quick-start)
-
-  - [Installation](https://github.com/hubin-keio/Spike_NLP?tab=readme-ov-file#how-to-install)
+* [Installation](https://github.com/hubin-keio/Spike_NLP?tab=readme-ov-file#installation)
 
 * [Usage](https://github.com/hubin-keio/Spike_NLP?tab=readme-ov-file#usage)
 
@@ -14,8 +12,8 @@ Use NLP to study the spike protein in SARS-CoV-2 virus.
 
 ## Purpose
 
-## Quick Start
-### How to Install
+
+## Installation
 The pnlp module can be installed using `pip install -e .`. Additional dependencies can be found in *INSERT REQUIREMENTS.TXT etc.*
 
 Other requirements:
@@ -26,12 +24,12 @@ We offer more in depth documentation located in the [notebooks](https://github.c
 
 ### Running the NLP BERT Model
 1) Creating the Databases
-  - Prior to running the NLP BERT Model, the `make_db.py` script must be ran to create the RBD Spike Protein database. This can be ran using the command `python make_db.py` from within the `/results/scripts` folder.
+  * Prior to running the NLP BERT Model, the `make_db.py` script must be ran to create the RBD Spike Protein database. This can be ran using the command `python make_db.py` from within the `/results/scripts` folder.
 2) Executing
-  - There are two different versions of the NLP BERT Model that you can run. One is with DistributedDataParallelization (DDP), which utilizes multiple devices (NVIDIA GPUs in this case) to perform faster training and testing; the other is without DDP. Both of these scripts can be ran from the `src/pnlp/runner` folder.
-    - To run model runner with DDP: `torchrun --standalone --nproc_per_node=4 gpu_ddp_runner.py`
-      - 4 GPUs on a singular node used in this case, set by `--nproc_per_node=4`
-    - To run model runner without DDP: `python runner.py`
+  * There are two different versions of the NLP BERT Model that you can run. One is with DistributedDataParallelization (DDP), which utilizes multiple devices (NVIDIA GPUs in this case) to perform faster training and testing; the other is without DDP. Both of these scripts can be ran from the `src/pnlp/runner` folder.
+    * To run model runner with DDP: `torchrun --standalone --nproc_per_node=4 gpu_ddp_runner.py`
+      * 4 GPUs on a singular node used in this case, set by `--nproc_per_node=4`
+    * To run model runner without DDP: `python runner.py`
 
 ### Transfer Learning
 1) Generating Pickles
