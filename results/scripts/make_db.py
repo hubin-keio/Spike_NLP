@@ -81,12 +81,12 @@ def test_db_contents(db_name:str):
     return True
 
 if __name__ == '__main__':
-    data_dir = os.path.dirname(__file__)
+    data_dir = os.path.join(os.path.dirname(__file__), '../../data')
 
     # AlphaSeq
-    # train_csv = os.path.join(data_dir, 'alphaseq/clean_avg_alpha_seq_selected_train.csv')
-    # test_csv = os.path.join(data_dir, 'alphaseq/clean_avg_alpha_seq_selected_test.csv')
-    # db_name = 'AlphaSeq.db'
+    # train_csv = os.path.join(data_dir, 'clean_avg_alpha_seq_selected_train.csv')
+    # test_csv = os.path.join(data_dir, 'clean_avg_alpha_seq_selected_test.csv')
+    # db_name = os.path.join(data_dir, 'AlphaSeq.db')
     # make_alphaseq_db(db_name, train_csv, test_csv)
 
     # if test_db_contents(db_name):
@@ -95,12 +95,12 @@ if __name__ == '__main__':
     #     print(f"There is an issue with the database '{db_name}'.")
 
     # RBD
-    # train_fasta = os.path.join(data_dir, 'spike/spikeprot0528.clean.uniq.noX.RBD_train.fasta')
-    # test_fasta = os.path.join(data_dir, 'spike/spikeprot0528.clean.uniq.noX.RBD_test.fasta')
-    # db_name = 'SARS_CoV_2_spike_noX_RBD.db'
-    # make_fasta_db(db_name, train_fasta, test_fasta)
+    train_fasta = os.path.join(data_dir, 'spikeprot0528.clean.uniq.noX.RBD_train.fasta')
+    test_fasta = os.path.join(data_dir, 'spikeprot0528.clean.uniq.noX.RBD_test.fasta')
+    db_name = os.path.join(data_dir, 'SARS_CoV_2_spike_noX_RBD.db')
+    make_fasta_db(db_name, train_fasta, test_fasta)
 
-    # if test_db_contents(db_name):
-    #     print(f"The database '{db_name}' is initialized correctly.")
-    # else:
-    #     print(f"There is an issue with the database '{db_name}'.")
+    if test_db_contents(db_name):
+        print(f"The database '{db_name}' is initialized correctly.")
+    else:
+        print(f"There is an issue with the database '{db_name}'.")
