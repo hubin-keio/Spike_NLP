@@ -119,7 +119,6 @@ def plot_from_embedding(csv_file, type):
     variant_labels = sorted(df["variant"].unique())
 
     variant_colors = {}
-    color_index = 0
     for variant in variant_labels:
         if variant in cmap:
             variant_colors[variant] = cmap[variant]

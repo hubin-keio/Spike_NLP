@@ -76,17 +76,24 @@ def generate_tsne_embedding(save_as, info_df, embedding_matrix, rnd_seed) -> str
     tsne_df.to_csv(save_as, index=False)
 
     return save_as
-
+  
 def plot_from_embedding(csv_file, type):
-    """
-    Plots single UMAP or t-SNE plot from generated embedding. 
-    """
     df = pd.read_csv(csv_file, sep=',', header=0)
 
-    # Color mapping based on variant label
+    # Custom color mapping for specified variants
     variant_labels = sorted(df["variant"].unique())
-    cmap = sns.color_palette('tab10', len(variant_labels))
-    variant_colors = {variant: cmap[i] for i, variant in enumerate(variant_labels)}
+    colors = sns.color_palette('tab20c')
+
+    cmap = {'Q1': colors[11], 
+            'Q2': colors[0], 
+            'Q3': 'black',
+            'Q4': colors[4]}
+
+    variant_colors = {}
+    for variant in variant_labels:
+        if variant in cmap:
+            variant_colors[variant] = cmap[variant]
+
     df['colors'] = [variant_colors[variant] for variant in df['variant']]
 
     # Legend handles
@@ -95,7 +102,7 @@ def plot_from_embedding(csv_file, type):
     # Create a scatter plot
     plt.figure(figsize=(16,9))
     plt.rcParams['font.family'] = 'sans-serif'
-    plt.scatter(df['DIM_1'], df['DIM_2'], c=df['colors'], s=20, edgecolor='w', alpha=0.5)
+    plt.scatter(df['DIM_1'], df['DIM_2'], c=df['colors'], s=20, edgecolor='w', alpha=0.7)
     plt.xlabel(f'{type} Dimension 1')
     plt.ylabel(f'{type} Dimension 2')
     plt.legend(handles=legend_handles, loc='upper right')
@@ -141,4 +148,3 @@ if __name__=="__main__":
     tsne_csv = generate_tsne_embedding(save_as, info_df, embedding_matrix, 0) # can also set rnd_seed here
     plot_from_embedding(tsne_csv, 'tSNE')
     logging.info(f"Post T-SNE memory usage: {memory_usage()}")
-
