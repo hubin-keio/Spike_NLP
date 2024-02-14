@@ -86,25 +86,23 @@ def process_data(input_csv, output_csv):
     duplicate_filtered_df = duplicate_filtered_df.rename(columns={"aa_substitutions": "labels"})
     
     # Save to csv
-    unique_output_csv = output_csv.replace("mutation", "unique_mutation")
-    unique_filtered_df.to_csv(unique_output_csv, index=False)
+    unique_filtered_df.to_csv(output_csv, index=False)
     duplicate_output_csv = output_csv.replace("mutation", "duplicate_mutation")
     duplicate_filtered_df.to_csv(duplicate_output_csv, index=False)
 
     # Split to train, test data (80/20)
     rnd_seed = 0
-    split_csv(rnd_seed, unique_output_csv)
-    split_csv(rnd_seed, duplicate_output_csv)
+    split_csv(rnd_seed, output_csv)
     print("")
 
 if __name__=="__main__":
 
-    data_dir = os.path.join(os.path.dirname(__file__), 'dms')
+    data_dir = os.path.join(os.path.dirname(__file__), '../../data')
 
-    expression_input_csv = os.path.join(data_dir, "expression/expression_meanFs.csv")
-    expression_output_csv = os.path.join(data_dir, "expression/mutation_expression_meanFs.csv")
+    expression_input_csv = os.path.join(data_dir, "dms_expression_meanFs.csv")
+    expression_output_csv = os.path.join(data_dir, "dms_mutation_expression_meanFs.csv")
     process_data(expression_input_csv, expression_output_csv)
 
-    binding_input_csv = os.path.join(data_dir, "binding/binding_Kds.csv")
-    binding_output_csv = os.path.join(data_dir, "binding/mutation_binding_Kds.csv")
+    binding_input_csv = os.path.join(data_dir, "dms_binding_Kds.csv")
+    binding_output_csv = os.path.join(data_dir, "dms_mutation_binding_Kds.csv")
     process_data(binding_input_csv, binding_output_csv)
