@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 """
-Plot 2d and 3d UMAP, and T-SNE plots from embeddings generateed from clustering.py.
+Plot 2d and 3d UMAP, and T-SNE plots from embeddings generated from plot_betacorona_blstm.py.
 """
 
 import os
@@ -48,11 +48,7 @@ def sample_embedding_pickle(run_dir:str, df, whole:bool, ado:bool, iteration:str
     """
     From extracted embedding dataframe, filters the data and prepares for
     UMAP and T-SNE.
-
-    If ado, data is filtered to just 'Alpha', 'Delta', 'Omicron' variants 
-    and sampled accordingly.
-
-    You can set the fraction of total Alpha, Delta, and/or Omicron that you want.
+    
     """
     save_as = save_as = os.path.join(run_dir, f"RBD_variants_clustering_esm_blstm")
 
@@ -120,8 +116,8 @@ def plot_tsne(save_as, embedding_matrix, all_types, type_labels, all_hosts, host
     plt.legend(handles=legend_handles, loc='lower right')
 
     ax = plt.gca()
-    ax.xaxis.set_major_locator(MultipleLocator(50))  # Set to 2 for every other tick
-    ax.yaxis.set_major_locator(MultipleLocator(50))  # Set to 2 for every other tick
+    ax.xaxis.set_major_locator(MultipleLocator(100))  # Set to 2 for every other tick
+    ax.yaxis.set_major_locator(MultipleLocator(80))  # Set to 2 for every other tick
 
     plt.tight_layout()
     plt.savefig(save_as + ".pdf", format="pdf")

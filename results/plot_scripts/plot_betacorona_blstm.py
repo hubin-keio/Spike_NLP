@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 """
 BLSTM model with FCN layer. 
-The ESM model is utilized to embed the real world RBD datasets, which is 
+The ESM model is utilized to embed the Beta-Coronavirus Dataset, which is 
 then used in the BLSTM model. The last hidden states of the model is then
 saved into a pickle file, which is utilized for clustering analysis and 
 also a classification model. 
@@ -19,8 +19,8 @@ from torch import nn
 from torch.utils.data import Dataset, DataLoader
 from transformers import AutoTokenizer, EsmModel
 
-class RBDVariantDataset(Dataset):
-    """ Real world RBD sequence dataset, embedded with ESM model. """
+class BetaCoronaDataset(Dataset):
+    """ BetaCorona virus sequence dataset, embedded with ESM model """
 
     def __init__(self, csv_file:str, device:str):
         self.df = pd.read_csv(csv_file, sep=',', header=0)
@@ -132,7 +132,7 @@ if __name__=='__main__':
 
     # Data file
     full_csv_file = "/data/spike_ml/valerie/Spike_NLP/data/betacoronavirus_seq.csv"
-    full_seq_dataset = RBDVariantDataset(full_csv_file, device)
+    full_seq_dataset = BetaCoronaDataset(full_csv_file, device)
     torch.manual_seed(0)
     full_seq_loader = DataLoader(full_seq_dataset, batch_size=batch_size, shuffle=True, drop_last=False)
 
