@@ -127,7 +127,8 @@ if __name__=="__main__":
 
     now = datetime.datetime.now()
     date_hour_minute = now.strftime("%Y-%m-%d_%H-%M")
-    run_dir = '/data/spike_ml/valerie/Spike_NLP/results/plots/Betacoronavirus'
+    run_dir = '../plots/Betacoronavirus'
+    data_dir = '../../data/pickles'
     os.makedirs(run_dir, exist_ok = True)
 
     # Add logging configuration
@@ -138,7 +139,7 @@ if __name__=="__main__":
                         datefmt='%Y-%m-%d %H:%M:%S')
 
     logging.info(f"Init memory usage: {memory_usage()}")
-    pickle_file = '/data/spike_ml/valerie/Spike_NLP/data/betacoronavirus_seq.pkl'
+    pickle_file = os.path.join(data_dir, "betacoronavirus_seq_clustering_esm_blstm.pkl")
     logging.info(f"Using this pickle: {pickle_file}")
     
     print(f"Extracting embeddings")
