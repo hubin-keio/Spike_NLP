@@ -47,15 +47,16 @@ def sample_embedding_pickle(run_dir:str, df, whole:bool, ado:bool, iteration:str
 
     You can set the fraction of total Alpha, Delta, and/or Omicron that you want.
     """
-    save_as = os.path.join(run_dir, f"rbd_variants_clustering_bert_blstm")
+    save_as = os.path.join(run_dir, f"rbd_variants_clustering_esm_blstm")
 
     if ado:
         ado_df = df[df['variant'].isin(["Alpha", "Delta", "Omicron"])]
 
         if not whole:
-            sample_sizes = {"Alpha": int(1 * (df['variant'] == 'Alpha').sum()), 
-                            "Delta": int(0.2 * (df['variant'] == 'Delta').sum()),  
-                            "Omicron": int(0.14 * (df['variant'] == 'Omicron').sum())} 
+            min_sample_size = ado_df['variant'].value_counts().min()
+            sample_sizes = {"Alpha": min_sample_size,
+                            "Delta": min_sample_size,
+                            "Omicron": min_sample_size}
 
             save_as = save_as + f"_a{sample_sizes['Alpha']}_d{sample_sizes['Delta']}_o{sample_sizes['Omicron']}"
 
@@ -115,9 +116,11 @@ def plot_from_embedding(csv_file, type):
     df = pd.read_csv(csv_file, sep=',', header=0)
 
     # Custom color mapping for specified variants
-    cmap = {'Alpha': 'black', 'Delta': 'tab:blue', 'Omicron': 'tab:green'}
+    cmap = {'Alpha': 'black', 
+            'Delta': 'tab:blue', 
+            'Omicron': 'tab:green'}
+    
     variant_labels = sorted(df["variant"].unique())
-
     variant_colors = {}
     for variant in variant_labels:
         if variant in cmap:
@@ -136,7 +139,6 @@ def plot_from_embedding(csv_file, type):
     plt.ylabel(f'{type} Dimension 2')
     plt.legend(handles=legend_handles, loc='upper right')
     plt.tight_layout()
-    plt.savefig(csv_file.replace('_coordinates.csv', '_plot.png'), format='png')
     plt.savefig(csv_file.replace('_coordinates.csv', '_plot.pdf'), format='pdf')
 
 def plot_12_embeddings(csv_files, type):
@@ -196,7 +198,6 @@ def plot_12_embeddings(csv_files, type):
     plt.subplots_adjust(right=0.8)
     plt.tight_layout()
     plt.savefig(csv_files[0].replace(f"_iter0_{type.lower()}_coordinates.csv", f"_12iterations_{type.lower()}_plot.png"), dpi=300, format='png')
-    plt.savefig(csv_files[0].replace(f"_iter0_{type.lower()}_coordinates.csv", f"_12iterations_{type.lower()}_plot.pdf"), format='pdf')
 
 if __name__=="__main__":
 
@@ -242,7 +243,7 @@ if __name__=="__main__":
     # Iterative downsampled dataset maps
     ado = True
     whole = False
-    iter_12 = False
+    iter_12 = True
     umap_list = []
     tsne_list = []
 
@@ -265,11 +266,10 @@ if __name__=="__main__":
         tsne_list.append(tsne_csv)
         logging.info(f"Post T-SNE memory usage: {memory_usage()}")
 
-if iter_12:
-    plot_12_embeddings(umap_list, 'UMAP')
-    plot_12_embeddings(tsne_list, 'tSNE')
-else:
-    plot_from_embedding(umap_list[0], 'UMAP')
-    plot_from_embedding(tsne_list[0], 'tSNE')
+    if iter_12:
+        plot_12_embeddings(umap_list, 'UMAP')
+        plot_12_embeddings(tsne_list, 'tSNE')
+    else:
+        plot_from_embedding(umap_list[0], 'UMAP')
+        plot_from_embedding(tsne_list[0], 'tSNE')
 
-    

@@ -81,19 +81,17 @@ def plot_from_embedding(csv_file, type):
     df = pd.read_csv(csv_file, sep=',', header=0)
 
     # Custom color mapping for specified variants
-    variant_labels = sorted(df["variant"].unique())
-    colors = sns.color_palette('tab20c')
+    cmap = {'Q1': 'black', 
+            'Q2': '#1f77b4',    # blue
+            'Q3': '#d62728',    # red
+            'Q4': '#f7b6d2'}    # pink
 
-    cmap = {'Q1': colors[11], 
-            'Q2': colors[0], 
-            'Q3': 'black',
-            'Q4': colors[4]}
-
+    variant_labels = sorted(df["variant"].unique())    
     variant_colors = {}
     for variant in variant_labels:
         if variant in cmap:
             variant_colors[variant] = cmap[variant]
-
+            
     df['colors'] = [variant_colors[variant] for variant in df['variant']]
 
     # Legend handles
@@ -107,7 +105,6 @@ def plot_from_embedding(csv_file, type):
     plt.ylabel(f'{type} Dimension 2')
     plt.legend(handles=legend_handles, loc='upper right')
     plt.tight_layout()
-    plt.savefig(csv_file.replace('_coordinates.csv', '_plot.png'), format='png')
     plt.savefig(csv_file.replace('_coordinates.csv', '_plot.pdf'), format='pdf')
 
 if __name__=="__main__":
