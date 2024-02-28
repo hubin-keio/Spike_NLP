@@ -13,16 +13,23 @@ Use NLP to study the spike protein in SARS-CoV-2 virus.
 ## Purpose
 
 
-## Installation
+## Installation - WIP
 The pnlp module can be installed using `pip install -e .`. Additional dependencies can be found in *INSERT REQUIREMENTS.TXT etc.*
 
 Other requirements:
 - NVIDIA GPU
 
 ## Usage
-We offer more in depth documentation located in the [notebooks](https://github.com/hubin-keio/Spike_NLP/tree/master/notebooks) folder, which we recommend reading for further understanding before usage of the models.
+We offer more in depth documentation located in the [notebooks](https://github.com/hubin-keio/Spike_NLP/tree/master/notebooks) folder, which we recommend reading for further understanding before usage of the models. 
+- `development_notes.ipynb`: Development process of the Spike NLP BERT model.
+- `create_db.ipynb`: How to create a db for the Spike NLP BERT model.
+- `data_processing_notes.ipynb`: How we processed the data sets for our models.
+- `run_model_notes.ipynb`: How to run the Spike NLP BERT model runner.
+- `embedding_notes.ipynb`: How to generate embedding pickles for transfer learning.
+- `transfer_learning_run_model_notes.ipynb`: How to run transfer learning model runners with and without pickles.
+- `clustering_notes.ipynb`: How to run/create clustering of our data.
 
-### Running the NLP BERT Model
+### Quickstart: Running the NLP BERT Model
 1) Creating the Databases
   * Prior to running the NLP BERT Model, the `make_db.py` script must be ran to create the RBD Spike Protein database. This can be ran using the command `python make_db.py` from within the `/results/scripts` folder.
 2) Executing
@@ -30,10 +37,5 @@ We offer more in depth documentation located in the [notebooks](https://github.c
     * To run model runner with DDP: `torchrun --standalone --nproc_per_node=4 gpu_ddp_runner.py`
       * 4 GPUs on a singular node used in this case, set by `--nproc_per_node=4`
     * To run model runner without DDP: `python runner.py`
-
-### Transfer Learning
-1) Generating Pickles
-2) Executing Models with Pickles
-3) Executing Models without Pickles
 
 ## Citation
