@@ -24,9 +24,9 @@ We offer more in depth documentation located in the [notebooks](https://github.c
 - `development_notes.ipynb`: Development process of the Spike NLP BERT model.
 - `create_db.ipynb`: How to create a db for the Spike NLP BERT model.
 - `data_processing_notes.ipynb`: How we processed the data sets for our models.
-- `run_model_notes.ipynb`: How to run the Spike NLP BERT model runner.
+- `model_runner_notes.ipynb`: How to run the Spike NLP BERT model runner.
 - `embedding_notes.ipynb`: How to generate embedding pickles for transfer learning.
-- `transfer_learning_run_model_notes.ipynb`: How to run transfer learning model runners with and without pickles.
+- `transfer_learning_model_runner_notes.ipynb`: How to run transfer learning model runners with and without pickles.
 - `clustering_notes.ipynb`: How to run/create clustering of our data.
 
 ### Quickstart: Running the NLP BERT Model
