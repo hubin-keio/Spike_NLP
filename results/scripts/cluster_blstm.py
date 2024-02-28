@@ -86,18 +86,15 @@ class BLSTM(nn.Module):
 
         return fcn_out
 
-def run_esm_model(model, tokenizer, embedder, data_loader, device, save_as):
-    """
-    Call the BLSTM model to generate hidden states.
-
-    Parameters:
-    - model: BLSTM model
-    - tokenizer: AutoTokenizer from Transformers, used for ESM model
-    - embedder: ESM model from Transformers
-    - data_loader: data loader of the dataset being embedded
-    - device: cuda or cpu, currently set for cuda
-    - save_as: what to save the pickle file as
-    """
+def run_esm_model(model,       # BLSTM model
+                  tokenizer,   # AutoTokenizer from Transformers, used for ESM model
+                  embedder,    # ESM model from Transformers
+                  data_loader, # Data loader of the dataset being embedded
+                  device,      # cuda or cpu, currently set for cuda
+                  type,        # rbd or alphaseq
+                  save_as):    # What to save the pickle file as
+    """ Call the BLSTM model to generate hidden states. """
+    
     model = model.to(device)
     model.eval()
 
@@ -112,19 +109,23 @@ def run_esm_model(model, tokenizer, embedder, data_loader, device, save_as):
         seq_ids, variants, seqs = batch_data
 
         # Add 2 to max_length to account for additional tokens added to beginning and end by ESM
-        # 225 for RBD, 251 for AlphaSeq
-        tokenized_seqs = tokenizer(seqs,return_tensors='pt', padding='max_length', truncation=True, max_length=225).to(device) 
+        max_length = 251 if type == 'alphaseq' else 225
+        tokenized_seqs = tokenizer(seqs,return_tensors='pt', padding='max_length', truncation=True, max_length=max_length).to(device) 
         embedder.eval()
 
         with torch.no_grad():
             esm_hidden_states = embedder(**tokenized_seqs).last_hidden_state
+            #print(f"ESM hidden state shape: {esm_hidden_states.shape}")
             blstm_hidden_states = model(esm_hidden_states)
-            print(blstm_hidden_states.shape)
+            #print(f"BLSTM hidden state shape: {blstm_hidden_states.shape}")
             
             for seq_id, variant, embedding in zip(seq_ids, variants, blstm_hidden_states):
                 all_seq_ids.append(seq_id)
                 all_variants.append(variant)
                 all_embeddings.append(embedding.cpu().numpy())
+
+    embedding_matrix = np.vstack(all_embeddings)
+    print(f"Stacked embedding matrix shape: {embedding_matrix.shape}")
 
     # Save data to a pickle file
     with open(save_as, 'wb') as f:
@@ -160,4 +161,4 @@ if __name__=='__main__':
 
     base_filename = os.path.basename(full_csv_file).replace('.csv', '_clustering_esm_blstm.pkl')
     save_as = os.path.join(f'{data_dir}/pickles', base_filename)
-    run_esm_model(blstm, tokenizer, embedder, full_seq_loader, device, save_as)
+    run_esm_model(blstm, tokenizer, embedder, full_seq_loader, device, 'rbd', save_as)
