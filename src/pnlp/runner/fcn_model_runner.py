@@ -8,7 +8,6 @@ import torch
 import pickle
 import datetime
 from typing import Union
-from collections import defaultdict
 from torch import nn
 from torch.utils.data import Dataset, DataLoader
 from runner_util import save_model, count_parameters, calc_train_test_history
@@ -112,7 +111,7 @@ def epoch_iteration(model, loss_fn, optimizer, data_loader, num_epochs: int, max
 if __name__=='__main__':
     
     # Data/results directories
-    result_tag = 'fcn-rbd_learned_320_dms_binding' # specify rbd_learned or esm, and expression or binding
+    result_tag = 'fcn-esm_dms_binding' # specify rbd_learned or esm, and expression or binding
     data_dir = os.path.join(os.path.dirname(__file__), f'../../../data/pickles')
     results_dir = os.path.join(os.path.dirname(__file__), f'../../../results/run_results/fcn')
     
@@ -125,12 +124,12 @@ if __name__=='__main__':
     # Load in data
     # embedded_train_pkl = os.path.join(data_dir, 'dms_mutation_expression_meanFs_train_esm_embedded.pkl') # fcn-esm_dms_expression
     # embedded_test_pkl = os.path.join(data_dir, 'dms_mutation_expression_meanFs_test_esm_embedded.pkl')
-    # embedded_train_pkl = os.path.join(data_dir, 'dms_mutation_binding_Kds_train_esm_embedded.pkl') # fcn-esm_dms_binding
-    # embedded_test_pkl = os.path.join(data_dir, 'dms_mutation_binding_Kds_test_esm_embedded.pkl')
+    embedded_train_pkl = os.path.join(data_dir, 'dms_mutation_binding_Kds_train_esm_embedded.pkl') # fcn-esm_dms_binding
+    embedded_test_pkl = os.path.join(data_dir, 'dms_mutation_binding_Kds_test_esm_embedded.pkl')
     # embedded_train_pkl = os.path.join(data_dir, 'dms_mutation_expression_meanFs_train_rbd_learned_embedded_320.pkl') # fcn-rbd_learned_320_dms_expression
     # embedded_test_pkl = os.path.join(data_dir, 'dms_mutation_expression_meanFs_test_rbd_learned_embedded_320.pkl')
-    embedded_train_pkl = os.path.join(data_dir, 'dms_mutation_binding_Kds_train_rbd_learned_embedded_320.pkl') # fcn-rbd_learned_320_dms_binding
-    embedded_test_pkl = os.path.join(data_dir, 'dms_mutation_binding_Kds_test_rbd_learned_embedded_320.pkl')
+    # embedded_train_pkl = os.path.join(data_dir, 'dms_mutation_binding_Kds_train_rbd_learned_embedded_320.pkl') # fcn-rbd_learned_320_dms_binding
+    # embedded_test_pkl = os.path.join(data_dir, 'dms_mutation_binding_Kds_test_rbd_learned_embedded_320.pkl')
     train_dataset = EmbeddedDMSDataset(embedded_train_pkl)
     test_dataset = EmbeddedDMSDataset(embedded_test_pkl)
 
@@ -139,7 +138,7 @@ if __name__=='__main__':
     batch_size = 32
     max_batch = -1
     lr = 1e-5
-    device = torch.device("cuda:1")
+    device = torch.device("cuda:0")
 
     # FCN input
     fcn_input_size = train_dataset.embeddings[0].size(1)   

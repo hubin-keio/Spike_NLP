@@ -1,38 +1,27 @@
 #!/usr/bin/env python
 """
 Model runner for bert_blstm.py initialized with ESM embeddings.
-
-TODO: 
-- Add blstm and bert_blstm to pnlp module? To avoid sys pathing hack
 """
 
 import os
 import sys
 import tqdm
-import copy
 import torch
-import pickle
 import datetime
 import pandas as pd
-import numpy as np
-import seaborn as sns
-import matplotlib.pyplot as plt
 from typing import Union
-from collections import defaultdict
 from torch import nn
 from torch.utils.data import Dataset, DataLoader
 from runner_util import save_model, count_parameters
 from transformers import AutoTokenizer, EsmModel 
-from pnlp.embedding.nlp_embedding import NLPEmbedding
-from pnlp.model.transformer import TransformerBlock
 from pnlp.embedding.tokenizer import ProteinTokenizer, token_to_index
-from pnlp.model.language import ProteinMaskedLanguageModel, BERT
+from pnlp.model.language import BERT
 
 sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 from model.blstm import BLSTM
 from model.bert_blstm import BERT_BLSTM
 sys.path.append(os.path.join(os.path.dirname(__file__), '../../../results'))
-from plot_scripts.plot_bert_blstm import calc_train_test_history 
+from plot_scripts.plot_bert_blstm import calc_train_test_history
 
 class DMSDataset(Dataset):
     """ Binding or Expression DMS Dataset, not from pickle! """

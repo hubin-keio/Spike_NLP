@@ -8,7 +8,6 @@ import torch
 import pickle
 import datetime
 from typing import Union
-from collections import defaultdict
 from torch import nn
 from torch_geometric.nn import SAGEConv, global_mean_pool
 from torch_geometric.data import Data
@@ -22,7 +21,7 @@ from model.graphsage import GraphSAGE
 class EmbeddedDMSDataset(Dataset):
     """ Binding or Expression DMS Dataset """
     
-    def __init__(self, pickle_file:str, device:str):
+    def __init__(self, pickle_file:str):
         """
         Load from pickle file:
         - sequence label (seq_id), 
@@ -41,7 +40,7 @@ class EmbeddedDMSDataset(Dataset):
 
     def __getitem__(self, idx):
         # Convert to pytorch geometric graph
-        embedding = self.embeddings[idx].to(device) 
+        embedding = self.embeddings[idx]
         edges = [(i, i+1) for i in range(embedding.size(0) - 1)]
         edge_index = torch.tensor(edges, dtype=torch.int64).t().contiguous()
         y = torch.tensor([self.numerical[idx]], dtype=torch.float32).view(-1, 1)
@@ -118,7 +117,7 @@ def epoch_iteration(model, loss_fn, optimizer, data_loader, num_epochs: int, max
 if __name__=='__main__':
 
     # Data/results directories
-    result_tag = 'graphsage-rbd_learned_320_dms_binding' # specify rbd_learned or esm, and expression or binding
+    result_tag = 'graphsage-esm_dms_binding' # specify rbd_learned or esm, and expression or binding
     data_dir = os.path.join(os.path.dirname(__file__), f'../../../data/pickles')
     results_dir = os.path.join(os.path.dirname(__file__), f'../../../results/run_results/graphsage')
     
@@ -131,22 +130,21 @@ if __name__=='__main__':
     # Load in data
     # embedded_train_pkl = os.path.join(data_dir, 'dms_mutation_expression_meanFs_train_esm_embedded.pkl') # graphsage-esm_dms_expression
     # embedded_test_pkl = os.path.join(data_dir, 'dms_mutation_expression_meanFs_test_esm_embedded.pkl')
-    # embedded_train_pkl = os.path.join(data_dir, 'dms_mutation_binding_Kds_train_esm_embedded.pkl') # graphsage-esm_dms_binding
-    # embedded_test_pkl = os.path.join(data_dir, 'dms_mutation_binding_Kds_test_esm_embedded.pkl')
+    embedded_train_pkl = os.path.join(data_dir, 'dms_mutation_binding_Kds_train_esm_embedded.pkl') # graphsage-esm_dms_binding
+    embedded_test_pkl = os.path.join(data_dir, 'dms_mutation_binding_Kds_test_esm_embedded.pkl')
     # embedded_train_pkl = os.path.join(data_dir, 'dms_mutation_expression_meanFs_train_rbd_learned_embedded_320.pkl') # graphsage-rbd_learned_320_dms_expression
     # embedded_test_pkl = os.path.join(data_dir, 'dms_mutation_expression_meanFs_test_rbd_learned_embedded_320.pkl')
-    embedded_train_pkl = os.path.join(data_dir, 'dms_mutation_binding_Kds_train_rbd_learned_embedded_320.pkl') # graphsage-rbd_learned_320_dms_binding
-    embedded_test_pkl = os.path.join(data_dir, 'dms_mutation_binding_Kds_test_rbd_learned_embedded_320.pkl')
-    
-    device = torch.device("cuda:3")
-    train_dataset = EmbeddedDMSDataset(embedded_train_pkl, device)
-    test_dataset = EmbeddedDMSDataset(embedded_test_pkl, device)
+    # embedded_train_pkl = os.path.join(data_dir, 'dms_mutation_binding_Kds_train_rbd_learned_embedded_320.pkl') # graphsage-rbd_learned_320_dms_binding
+    # embedded_test_pkl = os.path.join(data_dir, 'dms_mutation_binding_Kds_test_rbd_learned_embedded_320.pkl')
+    train_dataset = EmbeddedDMSDataset(embedded_train_pkl)
+    test_dataset = EmbeddedDMSDataset(embedded_test_pkl)
 
     # Run setup
     n_epochs = 5000
     batch_size = 32
     max_batch = -1
     lr = 1e-5
+    device = torch.device("cuda:0")
 
     # GraphSAGE input
     input_channels = train_dataset.embeddings[0].size(1) # number of input channels (dimensions of the embeddings)

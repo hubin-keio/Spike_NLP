@@ -1,23 +1,15 @@
 #!/usr/bin/env python
 """
-Model runner for bert_blstm.py
-
-TODO: 
-- Add blstm and bert_blstm to pnlp module? To avoid sys pathing hack
+Model runner for bert_blstm.py.
 """
 
 import os
 import sys
 import tqdm
 import torch
-import pickle
 import datetime
 import pandas as pd
-import numpy as np
-import seaborn as sns
-import matplotlib.pyplot as plt
 from typing import Union
-from collections import defaultdict
 from torch import nn
 from torch.utils.data import Dataset, DataLoader
 from runner_util import save_model, count_parameters
@@ -28,7 +20,7 @@ sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 from model.blstm import BLSTM
 from model.bert_blstm import BERT_BLSTM
 sys.path.append(os.path.join(os.path.dirname(__file__), '../../../results'))
-from plot_scripts.plot_bert_blstm import calc_train_test_history 
+from plot_scripts.plot_bert_blstm import calc_train_test_history
 
 class DMSDataset(Dataset):
     """ Binding or Expression DMS Dataset, not from pickle! """
