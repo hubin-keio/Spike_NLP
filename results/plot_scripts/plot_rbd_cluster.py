@@ -223,27 +223,27 @@ if __name__=="__main__":
     all_data = extract_embedding_pickle(pickle_file)
     logging.info(f"Post embedding extraction memory usage: {memory_usage()}")
 
-    # Whole dataset maps
-    ado = True
-    whole = True
-    save_as, info_df, embedding_matrix = sample_embedding_pickle(run_dir, all_data, whole, ado, "whole")
+    # # Whole dataset maps
+    # ado = True
+    # whole = True
+    # save_as, info_df, embedding_matrix = sample_embedding_pickle(run_dir, all_data, whole, ado, "whole")
 
-    print(f"Plotting 2D UMAP - All")
-    logging.info(f"Pre 2D UMAP memory usage: {memory_usage()}")
-    umap_csv = generate_umap_embedding(save_as, info_df, embedding_matrix, 0) # can also set rnd_seed here
-    plot_from_embedding(umap_csv, 'UMAP')
-    logging.info(f"2D UMAP memory usage: {memory_usage()}")
+    # print(f"Plotting 2D UMAP - All")
+    # logging.info(f"Pre 2D UMAP memory usage: {memory_usage()}")
+    # umap_csv = generate_umap_embedding(save_as, info_df, embedding_matrix, 0) # can also set rnd_seed here
+    # plot_from_embedding(umap_csv, 'UMAP')
+    # logging.info(f"2D UMAP memory usage: {memory_usage()}")
 
-    print(f"Plotting T-SNE - All")
-    logging.info(f"Pre T-SNE memory usage: {memory_usage()}")
-    tsne_csv = generate_tsne_embedding(save_as, info_df, embedding_matrix, 0) # can also set rnd_seed here
-    plot_from_embedding(tsne_csv, 'tSNE')
-    logging.info(f"Post T-SNE memory usage: {memory_usage()}")
+    # print(f"Plotting T-SNE - All")
+    # logging.info(f"Pre T-SNE memory usage: {memory_usage()}")
+    # tsne_csv = generate_tsne_embedding(save_as, info_df, embedding_matrix, 0) # can also set rnd_seed here
+    # plot_from_embedding(tsne_csv, 'tSNE')
+    # logging.info(f"Post T-SNE memory usage: {memory_usage()}")
 
     # Iterative downsampled dataset maps
     ado = True
     whole = False
-    iter_12 = True
+    iter_12 = False
     umap_list = []
     tsne_list = []
 
