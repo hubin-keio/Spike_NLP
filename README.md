@@ -28,6 +28,7 @@ We offer more in depth documentation located in the [notebooks](https://github.c
 - `embedding_notes.ipynb`: How to generate embedding pickles for transfer learning.
 - `transfer_learning_model_runner_notes.ipynb`: How to run transfer learning model runners with and without pickles.
 - `clustering_notes.ipynb`: How to run/create clustering of our data.
+- `lineage_analysis_notes.ipynb`: Connecting more metadata with our clusters, such as Pango lineages.
 
 ### Quickstart: Running the NLP BERT Model
 1) Creating the Databases
