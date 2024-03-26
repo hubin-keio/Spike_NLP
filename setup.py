@@ -34,7 +34,7 @@ setup(
     keywords='Protein, natural language processing, NLP',
     packages=find_packages('src', exclude=['contrib', 'docs', 'tests']),
     package_dir={'': 'src'},
-    install_requires=['torch', 'pandas', 'click'],  # Optional
+    # install_requires=['torch', 'pandas', 'click'],  # Optional
 
 
     # If there are data files included in your packages that need to be
