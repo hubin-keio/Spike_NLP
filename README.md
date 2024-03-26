@@ -14,7 +14,7 @@ Use NLP to study the spike protein in SARS-CoV-2 virus.
 
 
 ## Installation 
-To match the packages found in our conda environment, spike_env, you can run: `conda create --name spike_env --file package-list.txt`. The pnlp module can be installed using `pip install -e .`. Additional dependencies for pip (that may or may not be in `package-list.txt` can be found in `requirements.txt`.
+To match the packages found in our conda environment, spike_env, you can run `conda env create -f environment.yml`. After activating the conda environment, the pnlp module can be installed using `pip install -e .`. 
 
 Other requirements:
 - NVIDIA GPU
