@@ -11,7 +11,7 @@ Use NLP to study the spike protein in SARS-CoV-2 virus.
 * [Citation](https://github.com/hubin-keio/Spike_NLP?tab=readme-ov-file#citation)
 
 ## Purpose
-
+Understand the sequence to function, or genotype-phenotype, relationship of proteins by utilizing a language model-based approach. In particular, focusing on tailoring protein language models to predict protein mutation phenotypes, such as binding affinity or level of expression.
 
 ## Installation 
 To match the packages found in our conda environment, spike_env, you can run `conda env create -f environment.yml`. After activating the conda environment, the pnlp module can be installed using `pip install -e .`. 
