@@ -1,5 +1,5 @@
 # Spike_NLP
-Use NLP to study the spike protein in SARS-CoV-2 virus.
+Use NLP to study the spike protein in SARS-CoV-2 virus. [Preprint](https://www.biorxiv.org/content/10.1101/2024.04.05.588133v1.full)
 
 ## Table of Contents
 * [Purpose](https://github.com/hubin-keio/Spike_NLP?tab=readme-ov-file#purpose)
