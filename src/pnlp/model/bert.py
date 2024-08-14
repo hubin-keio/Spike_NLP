@@ -1,4 +1,5 @@
-""" BERT Model. """
+"""BERT Model"""
+
 
 import copy
 import torch
@@ -8,7 +9,9 @@ from pnlp.embedding.nlp_embedding import NLPEmbedding
 from pnlp.model.transformer import TransformerBlock
 
 class BERT(nn.Module):
-    """ BERT model. """
+    """
+    BERT model
+    """
 
     def __init__(self,
                  embedding_dim: int,

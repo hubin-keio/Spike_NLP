@@ -133,9 +133,3 @@ dmypy.json
 
 # emacs tmp file
 *~        
-
-# bash files
-*.sh
-
-results/scripts/validation
-new_dms/run_results
