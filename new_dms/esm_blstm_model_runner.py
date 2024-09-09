@@ -297,68 +297,60 @@ def epoch_iteration(model, tokenizer, loss_fn, optimizer, data_loader, epoch, ma
 if __name__=='__main__':
 
     # Data/results directories
-    result_tag = 'binding' # specify expression or binding
-    data_dir = os.path.join(os.path.dirname(__file__), f'./data/processed_dms')
+    result_tag = 'expression' # specify expression or binding
+    data_dir = os.path.join(os.path.dirname(__file__), f'./data/split_processed_dms')
     results_dir = os.path.join(os.path.dirname(__file__), f'./run_results/esm-blstm')
-
-    expression = "./run_results/esm-blstm/esm_blstm-dms_expression-2024-08-01_13-10/esm_blstm-dms_expression-train_89776_test_22445_metrics.csv"
-    e_name = "./run_results/esm-blstm/esm_blstm-dms_expression-2024-08-01_13-10/esm_blstm-dms_expression-train_89776_test_22445_metrics.pdf"
-    binding = "./run_results/esm-blstm/esm_blstm-dms_binding-2024-08-01_13-11/esm_blstm-dms_binding-train_84474_test_21119_metrics.csv"
-    b_name = "./run_results/esm-blstm/esm_blstm-dms_binding-2024-08-01_13-11/esm_blstm-dms_binding-train_84474_test_21119_metrics.pdf"
-
-    plot_log_file(expression, e_name)
-    plot_log_file(binding, b_name)
     
-    # # Create run directory for results
-    # now = datetime.datetime.now()
-    # date_hour_minute = now.strftime("%Y-%m-%d_%H-%M")
-    # run_dir = os.path.join(results_dir, f"esm_blstm-dms_{result_tag}-{date_hour_minute}")
-    # os.makedirs(run_dir, exist_ok = True)
+    # Create run directory for results
+    now = datetime.datetime.now()
+    date_hour_minute = now.strftime("%Y-%m-%d_%H-%M")
+    run_dir = os.path.join(results_dir, f"esm_blstm-dms_{result_tag}-{date_hour_minute}")
+    os.makedirs(run_dir, exist_ok = True)
 
-    # # Run setup
-    # n_epochs = 5000
-    # batch_size = 32
-    # max_batch = -1
-    # num_workers = 64
-    # lr = 1e-5
-    # device = torch.device("cuda:2" if torch.cuda.is_available() else "cpu")
+    # Run setup
+    n_epochs = 5000
+    batch_size = 32
+    max_batch = -1
+    num_workers = 64
+    lr = 1e-5
+    device = torch.device("cuda:1" if torch.cuda.is_available() else "cpu")
 
-    # # Create Dataset and DataLoader
-    # torch.manual_seed(0)
+    # Create Dataset and DataLoader
+    torch.manual_seed(0)
 
-    # if result_tag == "binding":
-    #     dms_train_csv = os.path.join(data_dir, 'mutation_combined_binding_train.csv') 
-    #     dms_test_csv = os.path.join(data_dir, 'mutation_combined_binding_test.csv') 
-    #     trained_model_pth = "../results/run_results/esm-blstm/esm-blstm-esm_dms_binding-2023-12-12_17-02/esm-blstm-esm_dms_binding-2023-12-12_17-02_train_84420_test_21105.model_save"
-    # elif result_tag == "expression":
-    #     dms_train_csv = os.path.join(data_dir, 'mutation_combined_expression_train.csv') 
-    #     dms_test_csv = os.path.join(data_dir, 'mutation_combined_expression_test.csv') 
-    #     trained_model_pth = "../results/run_results/esm-blstm/esm-blstm-esm_dms_expression-2023-12-12_16-58/esm-blstm-esm_dms_expression-2023-12-12_16-58_train_93005_test_23252.model_save"
+    if result_tag == "binding":
+        dms_train_csv = os.path.join(data_dir, 'mutation_combined_binding_train.csv') 
+        dms_test_csv = os.path.join(data_dir, 'mutation_combined_binding_test.csv') 
+        trained_model_pth = "../results/run_results/esm-blstm/esm-blstm-esm_dms_binding-2023-12-12_17-02/esm-blstm-esm_dms_binding-2023-12-12_17-02_train_84420_test_21105.model_save"
+    elif result_tag == "expression":
+        dms_train_csv = os.path.join(data_dir, 'mutation_combined_expression_train.csv') 
+        dms_test_csv = os.path.join(data_dir, 'mutation_combined_expression_test.csv') 
+        trained_model_pth = "../results/run_results/esm-blstm/esm-blstm-esm_dms_expression-2023-12-12_16-58/esm-blstm-esm_dms_expression-2023-12-12_16-58_train_93005_test_23252.model_save"
 
-    # train_dataset = DMSDataset(dms_train_csv)
-    # train_data_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, drop_last=False, num_workers=num_workers, pin_memory=True)
+    train_dataset = DMSDataset(dms_train_csv)
+    train_data_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, drop_last=False, num_workers=num_workers, pin_memory=True)
 
-    # test_dataset = DMSDataset(dms_test_csv)
-    # test_data_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=True, drop_last=False, num_workers=num_workers, pin_memory=True)
+    test_dataset = DMSDataset(dms_test_csv)
+    test_data_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=True, drop_last=False, num_workers=num_workers, pin_memory=True)
 
-    # # ESM input
-    # esm = EsmModel.from_pretrained("facebook/esm2_t6_8M_UR50D").to(device)
-    # tokenizer = AutoTokenizer.from_pretrained("facebook/esm2_t33_650M_UR50D")
+    # ESM input
+    esm = EsmModel.from_pretrained("facebook/esm2_t6_8M_UR50D").to(device)
+    tokenizer = AutoTokenizer.from_pretrained("facebook/esm2_t33_650M_UR50D")
 
-    # # BLSTM input
-    # lstm_input_size = 320
-    # lstm_hidden_size = 320
-    # lstm_num_layers = 1        
-    # lstm_bidrectional = True   
-    # fcn_hidden_size = 320
-    # blstm = BLSTM(lstm_input_size, lstm_hidden_size, lstm_num_layers, lstm_bidrectional, fcn_hidden_size)
+    # BLSTM input
+    lstm_input_size = 320
+    lstm_hidden_size = 320
+    lstm_num_layers = 1        
+    lstm_bidrectional = True   
+    fcn_hidden_size = 320
+    blstm = BLSTM(lstm_input_size, lstm_hidden_size, lstm_num_layers, lstm_bidrectional, fcn_hidden_size)
 
-    # model = ESM_BLSTM(esm, blstm)
-    # load_model_from_trained(model, trained_model_pth, device)
+    model = ESM_BLSTM(esm, blstm)
+    load_model_from_trained(model, trained_model_pth, device)
 
-    # # Run
-    # count_parameters(model)
-    # saved_model_pth = None
-    # from_checkpoint = False
-    # save_as = f"esm_blstm-dms_{result_tag}-train_{len(train_dataset)}_test_{len(test_dataset)}"
-    # run_model(model, tokenizer, train_data_loader, test_data_loader, n_epochs, lr, max_batch, device, run_dir, save_as, saved_model_pth, from_checkpoint)
+    # Run
+    count_parameters(model)
+    saved_model_pth = "./run_results/esm-blstm/esm_blstm-dms_expression-2024-08-20_15-27/checkpoint_saved_model.pth"
+    from_checkpoint = True
+    save_as = f"esm_blstm-dms_{result_tag}-train_{len(train_dataset)}_test_{len(test_dataset)}"
+    run_model(model, tokenizer, train_data_loader, test_data_loader, n_epochs, lr, max_batch, device, run_dir, save_as, saved_model_pth, from_checkpoint)
