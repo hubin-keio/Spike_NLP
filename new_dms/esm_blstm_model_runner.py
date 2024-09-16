@@ -350,7 +350,7 @@ if __name__=='__main__':
 
     # Run
     count_parameters(model)
-    saved_model_pth = "./run_results/esm-blstm/esm_blstm-dms_expression-2024-08-20_15-27/checkpoint_saved_model.pth"
-    from_checkpoint = True
+    saved_model_pth = None
+    from_checkpoint = False
     save_as = f"esm_blstm-dms_{result_tag}-train_{len(train_dataset)}_test_{len(test_dataset)}"
     run_model(model, tokenizer, train_data_loader, test_data_loader, n_epochs, lr, max_batch, device, run_dir, save_as, saved_model_pth, from_checkpoint)

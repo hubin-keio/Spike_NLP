@@ -158,21 +158,64 @@ def load_model_checkpoint(path_to_pth, metrics_csv, starting_epoch):
                 break
             fb.write(line)
 
+def load_model_into_heads(model, binding_model_pth, expression_model_pth, device):
+    # Load the binding head model
+    binding_state = torch.load(binding_model_pth, map_location=device)
+    binding_state_dict = binding_state['model_state_dict']
+    
+    # Load the expression head model
+    expression_state = torch.load(expression_model_pth, map_location=device)
+    expression_state_dict = expression_state['model_state_dict']
+    
+    # Load ESM model layers from one of the checkpoints
+    esm_layers = {k: v for k, v in binding_state_dict.items() if re.search(r'\besm\b', k)}
+    model.esm.load_state_dict(esm_layers, strict=False)
+    
+    # Load BLSTM shared layers from one of the checkpoints 
+    blstm_shared_layers = {k: v for k, v in binding_state_dict.items() if re.search(r'\bblstm\b', k) and 'out' not in k}
+    model.blstm.load_state_dict(blstm_shared_layers, strict=False)
+    
+    # Load the binding head weights
+    binding_weight_key = next((k for k in binding_state_dict.keys() if re.search(r'out\.weight$', k)), None)
+    binding_bias_key = next((k for k in binding_state_dict.keys() if re.search(r'out\.bias$', k)), None)
+    
+    if binding_weight_key and binding_bias_key:
+        binding_head_weights = {
+            'weight': binding_state_dict[binding_weight_key],
+            'bias': binding_state_dict[binding_bias_key]
+        }
+        model.blstm.binding_head.load_state_dict(binding_head_weights)
+        print(f"Loaded binding head from {binding_model_pth}")
+    
+    # Load the expression head weights
+    expression_weight_key = next((k for k in expression_state_dict.keys() if re.search(r'out\.weight$', k)), None)
+    expression_bias_key = next((k for k in expression_state_dict.keys() if re.search(r'out\.bias$', k)), None)
+    
+    if expression_weight_key and expression_bias_key:
+        expression_head_weights = {
+            'weight': expression_state_dict[expression_weight_key],
+            'bias': expression_state_dict[expression_bias_key]
+        }
+        model.blstm.expression_head.load_state_dict(expression_head_weights)
+        print(f"Loaded expression head from {expression_model_pth}")
+    
+    return model.to(device)
+
 def plot_log_file(metrics_csv, metrics_img):
     df = pd.read_csv(metrics_csv)
 
+    # Plotting
     sns.set_theme(style="darkgrid")
-
     fontsize = 28
     plt.subplots(figsize=(16, 9))
     plt.plot(df['Epoch'], df['Test RMSE'], label='Test RMSE', color='tab:blue', linewidth=3)
     plt.plot(df['Epoch'], df['Train RMSE'], label='Train RMSE', color='tab:orange', linewidth=3)
     plt.xlabel('Epochs', fontsize=fontsize)
     plt.xticks(fontsize=fontsize)
-    #plt.xlim(-250, 5250)
+    plt.xlim(-200, 5200)
     plt.ylabel('Loss', fontsize=fontsize)
     plt.yticks(fontsize=fontsize)
-    #plt.ylim(0.05, 0.79)
+    plt.ylim(-0.05, 1.4)
     plt.legend(loc='upper right', fontsize=fontsize)
     plt.tight_layout()
     plt.savefig(metrics_img, format='pdf')
@@ -180,8 +223,8 @@ def plot_log_file(metrics_csv, metrics_img):
 def plot_all_log_file(metrics_csv, metrics_img):
     df = pd.read_csv(metrics_csv)
 
+    # Plotting
     sns.set_theme(style="darkgrid")
-
     fontsize = 28
     fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(16, 18))  # 2 rows, 1 column
 
@@ -190,12 +233,11 @@ def plot_all_log_file(metrics_csv, metrics_img):
     ax1.plot(df['Epoch'], df['Train Expression RMSE'], label='Train Expression RMSE', color='tab:green', linewidth=3)
     ax1.plot(df['Epoch'], df['Train RMSE'], label='Train RMSE (Combined)', color='tab:orange', linewidth=3)
     ax1.set_xlabel('Epochs', fontsize=fontsize)
-    ax1.set_xticks(range(0, len(df['Epoch']), max(1, len(df['Epoch']) // 10)))
     ax1.tick_params(axis='x', labelsize=fontsize)
-    #ax1.set_xlim(-250, 5250)
+    ax1.set_xlim(-200, 5200)
     ax1.set_ylabel('Loss', fontsize=fontsize)
     ax1.tick_params(axis='y', labelsize=fontsize)
-    #ax1.set_ylim(0.05, 0.79)
+    ax1.set_ylim(-0.05, 1.4)
     ax1.legend(loc='upper right', fontsize=fontsize)
     ax1.set_title('Training Metrics', fontsize=fontsize)
 
@@ -204,19 +246,16 @@ def plot_all_log_file(metrics_csv, metrics_img):
     ax2.plot(df['Epoch'], df['Test Expression RMSE'], label='Test Expression RMSE', color='tab:green', linewidth=3)
     ax2.plot(df['Epoch'], df['Test RMSE'], label='Test RMSE (Combined)', color='tab:orange', linewidth=3)
     ax2.set_xlabel('Epochs', fontsize=fontsize)
-    ax2.set_xticks(range(0, len(df['Epoch']), max(1, len(df['Epoch']) // 10)))
     ax2.tick_params(axis='x', labelsize=fontsize)
-    #ax2.set_xlim(-250, 5250)
+    ax2.set_xlim(-200, 5200)
     ax2.set_ylabel('Loss', fontsize=fontsize)
     ax2.tick_params(axis='y', labelsize=fontsize)
-    #ax2.set_ylim(0.05, 0.79)
+    ax2.set_ylim(-0.05, 1.4)
     ax2.legend(loc='upper right', fontsize=fontsize)
     ax2.set_title('Testing Metrics', fontsize=fontsize)
 
-    # Adjust layout and save figure
     plt.tight_layout()
     plt.savefig(metrics_img, format='pdf')
-    plt.close()
 
 # MODEL RUNNING
 def run_model(model, tokenizer, train_data_loader, test_data_loader, n_epochs: int, lr:float, max_batch: Union[int, None], device: str, run_dir: str, save_as: str, saved_model_pth:str=None, continue_from_checkpoint:bool=False):
@@ -350,7 +389,9 @@ def epoch_iteration(model, tokenizer, loss_fn, optimizer, data_loader, epoch, ma
 if __name__=='__main__':
 
     # Data/results directories
-    result_tag = 'combined_OLD_DMS_DATA_WEIGHTS_NEW_DMS_DATA_SHORT'
+    #result_tag = 'combined_OLD_DMS_DATA_COMBINED-NEW_DMS_DATA_COMBINED' # Need to run
+    #result_tag = 'combined_OLD_DMS_DATA_SEPARATE-NEW_DMS_DATA_SEPARATE'
+    result_tag = 'combined_OLD_DMS_DATA_COMBINED'
     old_data_dir = os.path.join(os.path.dirname(__file__), f'../results/run_results/esm-blstm')
     data_dir = os.path.join(os.path.dirname(__file__), f'./data/split_processed_dms')
     results_dir = os.path.join(os.path.dirname(__file__), f'./run_results/esm-blstm')
@@ -362,17 +403,17 @@ if __name__=='__main__':
     os.makedirs(run_dir, exist_ok = True)
 
     # Run setup
-    n_epochs = 100
+    n_epochs = 5000
     batch_size = 32
     max_batch = -1
     num_workers = 64
     lr = 1e-5
-    device = torch.device("cuda:2" if torch.cuda.is_available() else "cpu")
+    device = torch.device("cuda:3" if torch.cuda.is_available() else "cpu")
 
     # Create Dataset and DataLoader
     torch.manual_seed(0)
-    dms_train_csv = os.path.join(data_dir, 'mutation_combined_NEW-DMS_train.csv') 
-    dms_test_csv = os.path.join(data_dir, 'mutation_combined_NEW-DMS_test.csv') 
+    dms_train_csv = os.path.join(data_dir, 'mutation_combined_OLD-DMS_train.csv') 
+    dms_test_csv = os.path.join(data_dir, 'mutation_combined_OLD-DMS_test.csv') 
 
     train_dataset = DMSDataset(dms_train_csv)
     train_data_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, drop_last=False, num_workers=num_workers, pin_memory=True)
@@ -394,9 +435,14 @@ if __name__=='__main__':
 
     model = ESM_BLSTM(esm, blstm)
 
+    # Loading saved model weights into separate heads
+    binding_trained_model_pth = os.path.join(old_data_dir, "esm-blstm-esm_dms_binding-2023-12-12_17-02/esm-blstm-esm_dms_binding-2023-12-12_17-02_train_84420_test_21105.model_save")
+    expression_trained_model_pth = os.path.join(old_data_dir, "esm-blstm-esm_dms_expression-2023-12-12_16-58/esm-blstm-esm_dms_expression-2023-12-12_16-58_train_93005_test_23252.model_save")
+    #load_model_into_heads(model, binding_trained_model_pth, expression_trained_model_pth, device)
+
     # Run
     count_parameters(model)
     saved_model_pth = None
-    continue_from_checkpoint = False     
+    continue_from_checkpoint = False
     save_as = f"esm_blstm-dms_{result_tag}-train_{len(train_dataset)}_test_{len(test_dataset)}"
     run_model(model, tokenizer, train_data_loader, test_data_loader, n_epochs, lr, max_batch, device, run_dir, save_as, saved_model_pth, continue_from_checkpoint)
