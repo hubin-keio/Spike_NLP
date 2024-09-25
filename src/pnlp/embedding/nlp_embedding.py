@@ -54,7 +54,7 @@ class NLPEmbedding(nn.Module):
         dropout: dropout rate
         """
         super().__init__()
-        self.embeddng_dim = embedding_dim
+        self.embedding_dim = embedding_dim
         self.max_len = max_len
         self.dropout = nn.Dropout(dropout)
         self.padding_idx = PADDING_IDX  # TODO FIXME: padding idx should be a construct parameter.
