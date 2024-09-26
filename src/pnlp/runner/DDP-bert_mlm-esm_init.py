@@ -1,6 +1,17 @@
 #!/usr/bin/env python
 """
-Model runner for BERT-MLM model (NOT ESM-initialized).
+Model runner for ESM-initialized BERT-MLM model. We utilize DistributedDataParallel.
+
+*GPU ONLY* to avoid device assignment issues.
+
+Usage:
+    torchrun
+    > --standalone: utilize single node
+    > --nproc_per_node: number of processes/gpus
+
+    Example equivalent commands to run (single node, 2 gpu; top is for bio-lambda cluster, bottom is generic):
+        /data/miniconda3/envs/spike_env/bin/time -v torchrun --standalone --nproc_per_node=2 DDP-bert_mlm-esm_init.py 
+        /usr/bin/time -v torchrun --standalone --nproc_per_node=2 DDP-bert_mlm-esm_init.py 
 """
 
 import os
@@ -23,6 +34,11 @@ from collections import defaultdict
 
 from pnlp.model.language import BERT, ProteinLM
 from pnlp.embedding.tokenizer import ProteinTokenizer, token_to_index
+
+import torch.distributed as dist
+from torch.utils.data.distributed import DistributedSampler
+from torch.nn.parallel import DistributedDataParallel as DDP
+from torch.distributed.elastic.multiprocessing.errors import record
 
 
 # SCHEDULER FOR OPTIMIZER
@@ -248,7 +264,6 @@ def plot_aa_preds_heatmap(preds_csv, preds_img):
 def run_model(model, tokenizer, train_data_loader, test_data_loader, n_epochs: int, lr:float, max_batch: Union[int, None], device: str, run_dir: str, save_as: str, saved_model_pth:str=None, from_checkpoint:bool=False):
     """ Run a model through train and test epochs. """
 
-    model = model.to(device)
     loss_fn = nn.CrossEntropyLoss(reduction='sum').to(device)  # sum of CEL at batch level.
     optimizer = torch.optim.Adam(model.parameters(), lr=lr, betas=(0.9, 0.999), weight_decay=0.01)
     scheduler = ScheduledOptim(
@@ -256,7 +271,7 @@ def run_model(model, tokenizer, train_data_loader, test_data_loader, n_epochs: i
         d_model=model.bert.embedding_dim, 
         n_warmup_steps=(len(train_data_loader.dataset) / train_data_loader.batch_size) * 0.1
     ) 
-
+    
     metrics_csv = os.path.join(run_dir, f"{save_as}_metrics.csv")
     metrics_img = os.path.join(run_dir, f"{save_as}_metrics.pdf")
     preds_csv = os.path.join(run_dir, f"{save_as}_predictions.csv")
@@ -266,7 +281,7 @@ def run_model(model, tokenizer, train_data_loader, test_data_loader, n_epochs: i
     best_accuracy = 0
     best_loss = float('inf')
     aa_preds_tracker = {}
-    
+
     # Load saved model
     if saved_model_pth is not None and os.path.exists(saved_model_pth):
         if from_checkpoint:
@@ -285,75 +300,96 @@ def run_model(model, tokenizer, train_data_loader, test_data_loader, n_epochs: i
             model.load_state_dict(model_state)
 
     with open(metrics_csv, "a") as fa:
-        if from_checkpoint: load_model_checkpoint(saved_model_pth, metrics_csv, starting_epoch)
-        else: fa.write(f"Epoch,Train Accuracy,Train Loss,Test Accuracy,Test Loss\n")
+        if from_checkpoint: 
+            load_model_checkpoint(saved_model_pth, metrics_csv, starting_epoch)
+        else: 
+            if dist.get_rank() == 0: fa.write(f"Epoch,Train Accuracy,Train Loss,Test Accuracy,Test Loss\n")
+
+    # Wrap model, sync proccesses - DDP 
+    model = DDP(model.to(device), device_ids=[device], output_device=device, find_unused_parameters=True)
+    dist.barrier()
 
     # Running
     start_time = time.time()
 
     for epoch in range(starting_epoch, n_epochs + 1):
         train_accuracy, train_loss = epoch_iteration(model, tokenizer, loss_fn, scheduler, train_data_loader, epoch, max_batch, device, mode='train')
+        dist.barrier()
         test_accuracy, test_loss, aa_pred_counter = epoch_iteration(model, tokenizer, loss_fn, scheduler, test_data_loader, epoch, max_batch, device, mode='test')
+        dist.barrier()
 
-        print(f'Epoch {epoch} | Train Accuracy: {train_accuracy:.4f}, Train Loss: {train_loss:.4f}')
-        print(f'{" "*(7+len(str(epoch)))}| Test Accuracy: {test_accuracy:.4f}, Test Loss: {test_loss:.4f}\n') 
-        
-        with open(metrics_csv, "a") as fa:         
-            fa.write(f"{epoch},{train_accuracy},{train_loss},{test_accuracy},{test_loss}\n")
-            fa.flush()
+        # Predictions from all processes
+        aa_pred_counter_list = [None] * dist.get_world_size()       
+        dist.all_gather_object(aa_pred_counter_list, aa_pred_counter)
 
-        for key, value in aa_pred_counter.items():
-            if key not in aa_preds_tracker:
-                aa_preds_tracker[key] = {}
-            aa_preds_tracker[key][epoch] = value
+        if dist.get_rank() == 0:
+            print(f'Epoch {epoch} | Train Accuracy: {train_accuracy:.4f}, Train Loss: {train_loss:.4f}')
+            print(f'{" "*(7+len(str(epoch)))}| Test Accuracy: {test_accuracy:.4f}, Test Loss: {test_loss:.4f}\n') 
+            with open(metrics_csv, "a") as fa:         
+                fa.write(f"{epoch},{train_accuracy},{train_loss},{test_accuracy},{test_loss}\n")
+                fa.flush()
 
-        # Save best
-        if test_accuracy > best_accuracy or (test_accuracy == best_accuracy and test_loss < best_loss):
-            best_accuracy = test_accuracy
-            best_loss = test_loss
-            model_path = os.path.join(run_dir, f'best_saved_model.pth')
-            print(f"NEW BEST model: accuracy {best_accuracy:.4f} and loss {best_loss:.4f}")
-            save_model(model, optimizer, scheduler, model_path, epoch, test_accuracy, test_loss)
-        
-        # Save every 10 epochs
-        if epoch > 0 and epoch % 10 == 0:
-            model_path = os.path.join(run_dir, f'saved_model-epoch_{epoch}.pth')
-            save_model(model, optimizer, scheduler, model_path, epoch, test_accuracy, test_loss)
+            # Combine predictions from all processes
+            for counter in aa_pred_counter_list:
+                for key, value in counter.items():
+                    if key not in aa_preds_tracker:
+                        aa_preds_tracker[key] = {}
+                    aa_preds_tracker[key][epoch] = value
 
-        # Save checkpoint 
-        model_path = os.path.join(run_dir, f'checkpoint_saved_model.pth')
-        save_model(model, optimizer, scheduler, model_path, epoch, test_accuracy, test_loss)
+            # Save best
+            if test_accuracy > best_accuracy or (test_accuracy == best_accuracy and test_loss < best_loss):
+                best_accuracy = test_accuracy
+                best_loss = test_loss
+                model_path = os.path.join(run_dir, f'best_saved_model.pth')
+                print(f"NEW BEST model: accuracy {best_accuracy:.4f} and loss {best_loss:.4f}")
+                save_model(model, optimizer, scheduler, model_path, epoch, best_accuracy, best_loss)
             
-        print("")
+            # Save every 10 epochs
+            if epoch > 0 and epoch % 10 == 0:
+                model_path = os.path.join(run_dir, f'saved_model-epoch_{epoch}.pth')
+                save_model(model, optimizer, scheduler, model_path, epoch, test_accuracy, test_loss)
 
-    # Write amino acid predictions
-    with open(preds_csv, 'w') as fb:
-        header = ", ".join(f"epoch {epoch}" for epoch in range(1, n_epochs + 1))
-        fb.write(f"expected_aa->predicted_aa, {header}\n")
+            # Save checkpoint 
+            model_path = os.path.join(run_dir, f'checkpoint_saved_model.pth')
+            save_model(model, optimizer, scheduler, model_path, epoch, test_accuracy, test_loss)
 
-        for key, values in aa_preds_tracker.items():
-            predictions_per_epoch = [values.get(epoch, 0) for epoch in range(1, n_epochs + 1)]
-            data_row = ", ".join(map(str, predictions_per_epoch))
-            fb.write(f"{key}, {data_row}\n")
+            print("")
+    
+    if dist.get_rank() == 0:
+        # Write amino acid predictions
+        with open(preds_csv, 'w') as fb:
+            header = ", ".join(f"epoch {epoch}" for epoch in range(1, n_epochs + 1))
+            fb.write(f"expected_aa->predicted_aa, {header}\n")
 
-    plot_log_file(metrics_csv, metrics_img)
-    plot_aa_preds_heatmap(preds_csv, preds_img)
+            # Write the data for each key in aa_preds_tracker
+            for key, epoch_values in aa_preds_tracker.items():
+                # Ensure that all epochs are covered and fill missing epochs with 0
+                predictions_per_epoch = [epoch_values.get(epoch, 0) for epoch in range(1, n_epochs + 1)]
+                data_row = ", ".join(map(str, predictions_per_epoch))
+                fb.write(f"{key}, {data_row}\n")
+
+        plot_log_file(metrics_csv, metrics_img)
+        plot_aa_preds_heatmap(preds_csv, preds_img)
 
     # End timer and print duration
     end_time = time.time()
     duration = end_time - start_time
     formatted_duration = str(datetime.timedelta(seconds=duration))
-    print(f'Training and testing complete in: {formatted_duration} ("D day(s), H:MM:SS.microseconds")')
+    if dist.get_rank() == 0:
+        print(f'Training and testing complete in: {formatted_duration} ("D day(s), H:MM:SS.microseconds")')
 
 def epoch_iteration(model, tokenizer, loss_fn, scheduler, data_loader, epoch, max_batch, device, mode):
     """ Used in run_model. """
     
-    model.train() if mode=='train' else model.eval()
+    model.train() if mode == 'train' else model.eval()
 
-    data_iter = tqdm.tqdm(enumerate(data_loader),
-                          desc=f'Epoch_{mode}: {epoch}',
-                          total=len(data_loader),
-                          bar_format='{l_bar}{r_bar}')
+    if dist.get_rank() == 0:
+        data_iter = tqdm.tqdm(enumerate(data_loader),
+                            desc=f'Epoch_{mode}: {epoch}',
+                            total=len(data_loader),
+                            bar_format='{l_bar}{r_bar}')
+    else:
+        data_iter = enumerate(data_loader)
 
     total_loss = 0
     total_masked = 0
@@ -364,14 +400,14 @@ def epoch_iteration(model, tokenizer, loss_fn, scheduler, data_loader, epoch, ma
     if not max_batch:
         max_batch = len(data_loader)
 
-    for batch, batch_data in data_iter:
-        if max_batch > 0 and batch >= max_batch:
+    for batch_idx, batch_data in data_iter:
+        if max_batch > 0 and batch_idx >= max_batch:
             break
 
         seq_ids, seqs = batch_data
-        masked_tokenized_seqs = tokenizer(seqs).to(device) 
+        masked_tokenized_seqs = tokenizer(seqs).to(device)
         unmasked_tokenized_seqs = tokenizer._batch_pad(seqs).to(device)
-   
+
         if mode == 'train':
             scheduler.zero_grad()
             preds = model(masked_tokenized_seqs)
@@ -400,24 +436,41 @@ def epoch_iteration(model, tokenizer, loss_fn, scheduler, data_loader, epoch, ma
             aa_keys = [f"{token_to_aa.get(token.item())}->{token_to_aa.get(pred_token.item())}" for token, pred_token in zip(unmasked_tokenized_seqs[masked_locations], predicted_tokens[masked_locations])]
             for aa_key in aa_keys:
                 aa_pred_counter[aa_key] += 1
+    
+    # Reduce metrics across all processes (sum them) to the main process (dst=0)
+    total_loss = torch.tensor(total_loss).to(device)
+    correct_predictions = torch.tensor(correct_predictions).to(device)
+    total_masked = torch.tensor(total_masked).to(device)
 
-    # Average accuracy/loss per token
-    avg_loss = total_loss / total_masked
-    avg_accuracy = (correct_predictions / total_masked) * 100
+    dist.all_reduce(total_loss, op=dist.ReduceOp.SUM)
+    dist.all_reduce(correct_predictions, op=dist.ReduceOp.SUM)
+    dist.all_reduce(total_masked, op=dist.ReduceOp.SUM)
+
+    # Initialize avg_accuracy and avg_loss to None for non-rank 0 processes
+    avg_loss = None
+    avg_accuracy = None
+
+    # Calculate average loss and accuracy per token (only on rank 0)
+    if dist.get_rank() == 0:
+        avg_loss = total_loss.item() / total_masked.item()
+        avg_accuracy = (correct_predictions.item() / total_masked.item()) * 100
 
     if mode == "train": return avg_accuracy, avg_loss
     else: return avg_accuracy, avg_loss, aa_pred_counter
 
-if __name__=='__main__':
+@record
+def main():
+    # Initialize process group - DDP
+    dist.init_process_group(backend='nccl', timeout=datetime.timedelta(seconds=5400))
 
     # Data/results directories
     data_dir = os.path.join(os.path.dirname(__file__), f'../../../data/rbd')
-    results_dir = os.path.join(os.path.dirname(__file__), f'../../../results/run_results/bert_mlm')
+    results_dir = os.path.join(os.path.dirname(__file__), f'../../../results/run_results/DDP-bert_mlm-esm_init')
 
     # Create run directory for results
     now = datetime.datetime.now()
     date_hour_minute = now.strftime("%Y-%m-%d_%H-%M")
-    run_dir = os.path.join(results_dir, f"bert_mlm-rbd-{date_hour_minute}")
+    run_dir = os.path.join(results_dir, f"DDP-bert_mlm-esm_init-rbd-{date_hour_minute}")
     os.makedirs(run_dir, exist_ok = True)
 
     # Run setup
@@ -426,16 +479,23 @@ if __name__=='__main__':
     max_batch = -1
     num_workers = 64
     lr = 1e-5
-    device = torch.device("cuda:2" if torch.cuda.is_available() else "cpu")
 
-    # Create Dataset and DataLoader
+    # Check if it can run on GPU - DDP
+    local_rank = int(os.environ["LOCAL_RANK"])
+    device = f'cuda:{local_rank}' if torch.cuda.is_available() else sys.exit(1)
+    torch.cuda.set_device(local_rank)
+
+    # Create Dataset and DataLoader, use DistributedSampler - DDP
     torch.manual_seed(0)
+    torch.cuda.manual_seed_all(0)
 
     train_dataset = RBDDataset(os.path.join(data_dir, "spikeprot0528.clean.uniq.noX.RBD.metadata.variants_train.csv"))
-    train_data_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, drop_last=False, num_workers=num_workers, pin_memory=True)
+    train_sampler = DistributedSampler(train_dataset)
+    train_data_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=False, drop_last=False, num_workers=num_workers, pin_memory=True, sampler=train_sampler)
 
     test_dataset = RBDDataset(os.path.join(data_dir, "spikeprot0528.clean.uniq.noX.RBD.metadata.variants_test.csv"))
-    test_data_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False, drop_last=False, num_workers=num_workers, pin_memory=True)
+    test_sampler = DistributedSampler(test_dataset, shuffle=False)
+    test_data_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False, drop_last=False, num_workers=num_workers, pin_memory=True, sampler=test_sampler)
 
     # BERT input
     max_len = 280
@@ -446,13 +506,22 @@ if __name__=='__main__':
     n_attn_heads = 10
 
     bert = BERT(embedding_dim, dropout, max_len, mask_prob, n_transformer_layers, n_attn_heads)
+    bert.embedding.load_pretrained_embeddings(os.path.join(data_dir, 'esm_weights-embedding_dim320.pth'), no_grad=False)
     tokenizer = ProteinTokenizer(max_len, mask_prob)
 
     model = ProteinLM(bert, vocab_size=len(token_to_index))
 
     # Run
-    count_parameters(model)
-    saved_model_pth = "Spike_NLP_kaetlyn/results/run_results/bert_mlm/bert_mlm-rbd-2024-09-24_20-31/best_saved_model.pth"
+    if dist.get_rank() == 0: 
+        count_parameters(model)
+    saved_model_pth = None
     from_checkpoint = False
-    save_as = f"bert_mlm-RBD-train_{len(train_dataset)}_test_{len(test_dataset)}"
+    save_as = f"DDP-bert_mlm-esm_init-RBD-train_{len(train_dataset)}_test_{len(test_dataset)}"
     run_model(model, tokenizer, train_data_loader, test_data_loader, n_epochs, lr, max_batch, device, run_dir, save_as, saved_model_pth, from_checkpoint)
+
+    # Clean up - DDP
+    dist.destroy_process_group() 
+
+if __name__=='__main__':
+    main()
+    

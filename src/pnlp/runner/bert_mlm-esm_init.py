@@ -343,7 +343,7 @@ def run_model(model, tokenizer, train_data_loader, test_data_loader, n_epochs: i
     end_time = time.time()
     duration = end_time - start_time
     formatted_duration = str(datetime.timedelta(seconds=duration))
-    print(f'Training and testing complete in: {formatted_duration}')
+    print(f'Training and testing complete in: {formatted_duration} ("D day(s), H:MM:SS.microseconds")')
 
 def epoch_iteration(model, tokenizer, loss_fn, scheduler, data_loader, epoch, max_batch, device, mode):
     """ Used in run_model. """
@@ -402,8 +402,8 @@ def epoch_iteration(model, tokenizer, loss_fn, scheduler, data_loader, epoch, ma
                 aa_pred_counter[aa_key] += 1
 
     # Average accuracy/loss per token
-    avg_accuracy = (correct_predictions / total_masked) * 100
     avg_loss = total_loss / total_masked
+    avg_accuracy = (correct_predictions / total_masked) * 100
 
     if mode == "train": return avg_accuracy, avg_loss
     else: return avg_accuracy, avg_loss, aa_pred_counter
