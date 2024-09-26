@@ -110,7 +110,7 @@ def run_model(model, tokenizer, train_data_loader, test_data_loader, n_epochs: i
         test_accuracy, test_loss, aa_pred_counter = epoch_iteration(model, tokenizer, loss_fn, scheduler, test_data_loader, epoch, max_batch, device, mode='test')
         dist.barrier()
 
-        # Predictions from all processes
+        # Predictions from all processes - DDP
         aa_pred_counter_list = [None] * dist.get_world_size()       
         dist.all_gather_object(aa_pred_counter_list, aa_pred_counter)
 
@@ -121,7 +121,7 @@ def run_model(model, tokenizer, train_data_loader, test_data_loader, n_epochs: i
                 fa.write(f"{epoch},{train_accuracy},{train_loss},{test_accuracy},{test_loss}\n")
                 fa.flush()
 
-            # Combine predictions from all processes
+            # Combine predictions from all processes - DDP
             for counter in aa_pred_counter_list:
                 for key, value in counter.items():
                     if key not in aa_preds_tracker:
@@ -229,7 +229,7 @@ def epoch_iteration(model, tokenizer, loss_fn, scheduler, data_loader, epoch, ma
             for aa_key in aa_keys:
                 aa_pred_counter[aa_key] += 1
     
-    # Reduce metrics across all processes (sum them) to the main process (dst=0)
+    # Reduce metrics across all processes (sum them) to the main process (dst=0) - DDP
     total_loss = torch.tensor(total_loss).to(device)
     correct_predictions = torch.tensor(correct_predictions).to(device)
     total_masked = torch.tensor(total_masked).to(device)
@@ -238,11 +238,11 @@ def epoch_iteration(model, tokenizer, loss_fn, scheduler, data_loader, epoch, ma
     dist.all_reduce(correct_predictions, op=dist.ReduceOp.SUM)
     dist.all_reduce(total_masked, op=dist.ReduceOp.SUM)
 
-    # Initialize avg_accuracy and avg_loss to None for non-rank 0 processes
+    # Initialize avg_accuracy and avg_loss to None for non-rank 0 processes - DDP
     avg_loss = None
     avg_accuracy = None
 
-    # Calculate average loss and accuracy per token (only on rank 0)
+    # Calculate average loss and accuracy per masked token (only on rank 0) - DDP
     if dist.get_rank() == 0:
         avg_loss = total_loss.item() / total_masked.item()
         avg_accuracy = (correct_predictions.item() / total_masked.item()) * 100

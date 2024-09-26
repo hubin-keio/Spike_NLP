@@ -193,7 +193,7 @@ def epoch_iteration(model, tokenizer, loss_fn, scheduler, data_loader, epoch, ma
             for aa_key in aa_keys:
                 aa_pred_counter[aa_key] += 1
 
-    # Average accuracy/loss per token
+    # Average accuracy/loss per masked token
     avg_loss = total_loss / total_masked
     avg_accuracy = (correct_predictions / total_masked) * 100
 
