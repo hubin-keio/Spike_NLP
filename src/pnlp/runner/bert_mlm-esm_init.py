@@ -199,7 +199,8 @@ def plot_aa_preds_heatmap(preds_csv, preds_img):
     df[epoch_columns] = df[epoch_columns].apply(pd.to_numeric, errors='coerce').fillna(0)
 
     # Sum the counts across all epochs to get the total error count for each expected->predicted pair
-    df['Total Count'] = df[epoch_columns].sum(axis=1)
+    total_count = df[epoch_columns].sum(axis=1)
+    df = pd.concat([df, total_count.rename('Total Count')], axis=1)
 
     # Merge with all possible amino acid combinations so missing pairs get a count of 0
     df = pd.merge(all_df, df[['Expected', 'Predicted', 'Total Count']], how="left", on=["Expected", "Predicted"])
@@ -343,7 +344,7 @@ def run_model(model, tokenizer, train_data_loader, test_data_loader, n_epochs: i
     end_time = time.time()
     duration = end_time - start_time
     formatted_duration = str(datetime.timedelta(seconds=duration))
-    print(f'Training and testing complete in: {formatted_duration} ("D day(s), H:MM:SS.microseconds")')
+    print(f'Training and testing complete in: {formatted_duration} (D day(s), H:MM:SS.microseconds)')
 
 def epoch_iteration(model, tokenizer, loss_fn, scheduler, data_loader, epoch, max_batch, device, mode):
     """ Used in run_model. """

@@ -215,7 +215,8 @@ def plot_aa_preds_heatmap(preds_csv, preds_img):
     df[epoch_columns] = df[epoch_columns].apply(pd.to_numeric, errors='coerce').fillna(0)
 
     # Sum the counts across all epochs to get the total error count for each expected->predicted pair
-    df['Total Count'] = df[epoch_columns].sum(axis=1)
+    total_count = df[epoch_columns].sum(axis=1)
+    df = pd.concat([df, total_count.rename('Total Count')], axis=1)
 
     # Merge with all possible amino acid combinations so missing pairs get a count of 0
     df = pd.merge(all_df, df[['Expected', 'Predicted', 'Total Count']], how="left", on=["Expected", "Predicted"])
@@ -265,11 +266,11 @@ def run_model(model, tokenizer, train_data_loader, test_data_loader, n_epochs: i
     """ Run a model through train and test epochs. """
 
     loss_fn = nn.CrossEntropyLoss(reduction='sum').to(device)  # sum of CEL at batch level.
-    optimizer = torch.optim.Adam(model.parameters(), lr=lr, betas=(0.9, 0.999), weight_decay=0.01)
+    optimizer = torch.optim.Adam(model.parameters(), lr=lr*dist.get_world_size(), betas=(0.9, 0.999), weight_decay=0.01)
     scheduler = ScheduledOptim(
         optimizer, 
         d_model=model.bert.embedding_dim, 
-        n_warmup_steps=(len(train_data_loader.dataset) / train_data_loader.batch_size) * 0.1
+        n_warmup_steps=(len(train_data_loader.dataset) / (train_data_loader.batch_size/dist.get_world_size())) * 0.1
     ) 
     
     metrics_csv = os.path.join(run_dir, f"{save_as}_metrics.csv")
@@ -376,7 +377,7 @@ def run_model(model, tokenizer, train_data_loader, test_data_loader, n_epochs: i
     duration = end_time - start_time
     formatted_duration = str(datetime.timedelta(seconds=duration))
     if dist.get_rank() == 0:
-        print(f'Training and testing complete in: {formatted_duration} ("D day(s), H:MM:SS.microseconds")')
+        print(f'Training and testing complete in: {formatted_duration} (D day(s), H:MM:SS.microseconds)')
 
 def epoch_iteration(model, tokenizer, loss_fn, scheduler, data_loader, epoch, max_batch, device, mode):
     """ Used in run_model. """
