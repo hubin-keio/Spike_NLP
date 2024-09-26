@@ -31,6 +31,8 @@ class ScheduledOptim():
 
     Author: codertimo
     https://github.com/codertimo/BERT-pytorch/blob/master/bert_pytorch/trainer/optim_schedule.py
+
+    Added state_dict and load_state_dict
     """
 
     def __init__(self, optimizer, d_model: int, n_warmup_steps):
@@ -60,6 +62,18 @@ class ScheduledOptim():
 
         for param_group in self._optimizer.param_groups:
             param_group['lr'] = lr
+
+    def state_dict(self):
+        """Save the current state of the scheduler."""
+        return {
+            'n_current_steps': self.n_current_steps,
+            'optimizer_state_dict': self._optimizer.state_dict()
+        }
+
+    def load_state_dict(self, state_dict):
+        """Restore the state of the scheduler."""
+        self.n_current_steps = state_dict['n_current_steps']
+        self._optimizer.load_state_dict(state_dict['optimizer_state_dict'])
 
 # DATASET    
 class RBDDataset(Dataset):
@@ -97,25 +111,30 @@ def count_parameters(model):
     print(f"Total Trainable Params: {total_params}\n")
     return total_params
 
-def save_model(model, optimizer, path_to_pth, epoch, accuracy, loss):
+def save_model(model, optimizer, scheduler, path_to_pth, epoch, accuracy, loss):
     torch.save({
         'model_state_dict': model.state_dict(),
         'optimizer_state_dict': optimizer.state_dict(),
+        'scheduler_state_dict': scheduler.state_dict(),  
         'epoch': epoch,
         'accuracy': accuracy,
-        'loss': loss}, path_to_pth
-    )
-    print(f"Model and optimizer state saved to {path_to_pth}")
+        'loss': loss
+    }, path_to_pth)
+    print(f"Model, optimizer, scheduler state saved to {path_to_pth}")
 
-def load_model(model, optimizer, saved_model_pth, device):
+def load_model(saved_model_pth, device):
     saved_state = torch.load(saved_model_pth, map_location=device)
-    model.load_state_dict(saved_state['model_state_dict'])
-    optimizer.load_state_dict(saved_state['optimizer_state_dict'])
+
+    model_state = saved_state['model_state_dict']
+    optimizer_state = saved_state['optimizer_state_dict']
+    scheduler_state = saved_state['scheduler_state_dict']
+
     epoch = saved_state['epoch']
     accuracy = saved_state['accuracy']
     loss = saved_state['loss']
-    print(f"Loaded model from {saved_model_pth} at epoch {epoch}, accuracy {accuracy}, loss {loss}")
-    return model.to(device), optimizer, epoch, accuracy, loss
+
+    print(f"Loaded in model from {saved_model_pth}, saved at epoch {epoch}, accuracy {accuracy}, loss {loss}")
+    return model_state, optimizer_state, scheduler_state, epoch, accuracy, loss
 
 def load_model_checkpoint(path_to_pth, metrics_csv, starting_epoch):
     """ Load model data csv, and model pth. """
@@ -145,7 +164,6 @@ def plot_log_file(metrics_csv, metrics_img):
     ax1.plot(df['Epoch'], df['Train Loss'], label='Train Loss', color='tab:red', linewidth=3)
     ax1.plot(df['Epoch'], df['Test Loss'], label='Test Loss', color='tab:orange', linewidth=3)
     ax1.tick_params(axis='x', labelsize=fontsize)
-    ax1.set_ylim(-0.5e6, 14e6) 
     ax1.set_ylabel('Loss', fontsize=fontsize)
     ax1.tick_params(axis='y', labelsize=fontsize)
     ax1.legend(loc='upper right', fontsize=fontsize)
@@ -233,100 +251,101 @@ def run_model(model, tokenizer, train_data_loader, test_data_loader, n_epochs: i
     model = model.to(device)
     loss_fn = nn.CrossEntropyLoss(reduction='sum').to(device)  # sum of CEL at batch level.
     optimizer = torch.optim.Adam(model.parameters(), lr=lr, betas=(0.9, 0.999), weight_decay=0.01)
-    optimizer_scheduler = ScheduledOptim(
+    scheduler = ScheduledOptim(
         optimizer, 
         d_model=model.bert.embedding_dim, 
         n_warmup_steps=(len(train_data_loader.dataset) / train_data_loader.batch_size) * 0.1
     ) 
 
-    starting_epoch = 1
-    best_accuracy = 0
-    best_loss = float('inf')
-
-    # Load saved model if provided
-    if saved_model_pth is not None:
-        model, optimizer, starting_epoch, best_accuracy, best_loss = load_model(model, optimizer, saved_model_pth, device)
-        starting_epoch += 1
-
-    start_time = time.time()
-    
     metrics_csv = os.path.join(run_dir, f"{save_as}_metrics.csv")
     metrics_img = os.path.join(run_dir, f"{save_as}_metrics.pdf")
     preds_csv = os.path.join(run_dir, f"{save_as}_predictions.csv")
     preds_img = os.path.join(run_dir, f"{save_as}_predictions.pdf")
+
+    starting_epoch = 1
+    best_accuracy = 0
+    best_loss = float('inf')
     aa_preds_tracker = {}
     
-    # If saved model, skip to predictions 
-    # Except when from checkpoint (still need saved model)
-    if saved_model_pth is None or (from_checkpoint and saved_model_pth is not None):
+    # Load saved model
+    if saved_model_pth is not None and os.path.exists(saved_model_pth):
+        if from_checkpoint:
+            model_state, optimizer_state, scheduler_state, starting_epoch, best_accuracy, best_loss = load_model(saved_model_pth, device)
 
-        if starting_epoch > n_epochs:
-            raise ValueError(f"Starting epoch ({starting_epoch}) is greater than the total number of epochs to run ({n_epochs}). Adjust the number of epochs, 'n_epochs'.")
+            model.load_state_dict(model_state)
+            optimizer.load_state_dict(optimizer_state)
+            scheduler.load_state_dict(scheduler_state)
+            starting_epoch += 1
+            
+            if starting_epoch > n_epochs:
+                raise ValueError(f"Starting epoch ({starting_epoch}) is greater than the total number of epochs to run ({n_epochs}). Adjust the number of epochs, 'n_epochs'.")
         
-        # Write metrics
-        with open(metrics_csv, "a") as fa:
-            if from_checkpoint: load_model_checkpoint(saved_model_pth, metrics_csv, starting_epoch)
-            else: fa.write(f"Epoch,Train Accuracy,Train Loss,Test Accuracy,Test Loss\n")
+        else:
+            model_state, _, _, _, _ = load_model(saved_model_pth, device)
+            model.load_state_dict(model_state)
 
-            for epoch in range(starting_epoch, n_epochs + 1):
-                if not max_batch:
-                    max_batch = len(train_data_loader)
+    with open(metrics_csv, "a") as fa:
+        if from_checkpoint: load_model_checkpoint(saved_model_pth, metrics_csv, starting_epoch)
+        else: fa.write(f"Epoch,Train Accuracy,Train Loss,Test Accuracy,Test Loss\n")
 
-                train_accuracy, train_loss = epoch_iteration(model, tokenizer, loss_fn, optimizer_scheduler, train_data_loader, epoch, max_batch, device, mode='train')
-                test_accuracy, test_loss, aa_pred_counter = epoch_iteration(model, tokenizer, loss_fn, optimizer_scheduler, test_data_loader, epoch, max_batch, device, mode='test')
+    # Running
+    start_time = time.time()
 
-                print(f'Epoch {epoch} | Train Accuracy: {train_accuracy:.4f}, Train Loss: {train_loss:.4f}')
-                print(f'{" "*(7+len(str(epoch)))}| Test Accuracy: {test_accuracy:.4f}, Test Loss: {test_loss:.4f}\n')          
-                fa.write(f"{epoch},{train_accuracy},{train_loss},{test_accuracy},{test_loss}\n")
-                fa.flush()
+    for epoch in range(starting_epoch, n_epochs + 1):
+        train_accuracy, train_loss = epoch_iteration(model, tokenizer, loss_fn, scheduler, train_data_loader, epoch, max_batch, device, mode='train')
+        test_accuracy, test_loss, aa_pred_counter = epoch_iteration(model, tokenizer, loss_fn, scheduler, test_data_loader, epoch, max_batch, device, mode='test')
 
-                for key in aa_pred_counter:
-                    if key not in aa_preds_tracker :
-                        aa_preds_tracker[key] = {}
-                    aa_preds_tracker[key][epoch] = aa_pred_counter.get(key)
-
-                # Save best
-                if test_accuracy > best_accuracy or (test_accuracy == best_accuracy and test_loss < best_loss):
-                    best_accuracy = test_accuracy
-                    best_loss = test_loss
-                    model_path = os.path.join(run_dir, f'best_saved_model.pth')
-                    print(f"NEW BEST model: accuracy {best_accuracy:.4f} and loss {best_loss:.4f}")
-                    save_model(model, optimizer, model_path, epoch, best_accuracy, best_loss)
-                
-                # Save every 10 epochs
-                if epoch > 0 and epoch % 10 == 0:
-                    model_path = os.path.join(run_dir, f'saved_model-epoch_{epoch}.pth')
-                    save_model(model, optimizer, model_path, epoch, test_accuracy, test_loss)
-
-                # Save checkpoint 
-                model_path = os.path.join(run_dir, f'checkpoint_saved_model.pth')
-                save_model(model, optimizer, model_path, epoch, test_accuracy, test_loss)
-                    
-                print("")
+        print(f'Epoch {epoch} | Train Accuracy: {train_accuracy:.4f}, Train Loss: {train_loss:.4f}')
+        print(f'{" "*(7+len(str(epoch)))}| Test Accuracy: {test_accuracy:.4f}, Test Loss: {test_loss:.4f}\n') 
         
-        plot_log_file(metrics_csv, metrics_img)
+        with open(metrics_csv, "a") as fa:         
+            fa.write(f"{epoch},{train_accuracy},{train_loss},{test_accuracy},{test_loss}\n")
+            fa.flush()
 
-        # Write Predictions
-        with open(preds_csv, 'w') as fb:
-            header = ", ".join(f"epoch {epoch}" for epoch in range(1, n_epochs + 1))
-            header = f"expected_aa->predicted_aa, {header}\n"
-            fb.write(header)
+        for key, value in aa_pred_counter.items():
+            if key not in aa_preds_tracker:
+                aa_preds_tracker[key] = {}
+            aa_preds_tracker[key][epoch] = value
 
-            for key in aa_preds_tracker:
-                aa_preds_tracker[key] = [aa_preds_tracker[key].get(epoch, 0) for epoch in range(1, n_epochs + 1)]
-                data_row = ", ".join(str(val) for val in aa_preds_tracker[key])
-                fb.write(f"{key}, {data_row}\n")
+        # Save best
+        if test_accuracy > best_accuracy or (test_accuracy == best_accuracy and test_loss < best_loss):
+            best_accuracy = test_accuracy
+            best_loss = test_loss
+            model_path = os.path.join(run_dir, f'best_saved_model.pth')
+            print(f"NEW BEST model: accuracy {best_accuracy:.4f} and loss {best_loss:.4f}")
+            save_model(model, optimizer, scheduler, model_path, epoch, test_accuracy, test_loss)
+        
+        # Save every 10 epochs
+        if epoch > 0 and epoch % 10 == 0:
+            model_path = os.path.join(run_dir, f'saved_model-epoch_{epoch}.pth')
+            save_model(model, optimizer, scheduler, model_path, epoch, test_accuracy, test_loss)
 
-        plot_aa_preds_heatmap(preds_csv, preds_img)
+        # Save checkpoint 
+        model_path = os.path.join(run_dir, f'checkpoint_saved_model.pth')
+        save_model(model, optimizer, scheduler, model_path, epoch, test_accuracy, test_loss)
+            
+        print("")
+
+    # Write amino acid predictions
+    with open(preds_csv, 'w') as fb:
+        header = ", ".join(f"epoch {epoch}" for epoch in range(1, n_epochs + 1))
+        fb.write(f"expected_aa->predicted_aa, {header}\n")
+
+        for key, values in aa_preds_tracker.items():
+            predictions_per_epoch = [values.get(epoch, 0) for epoch in range(1, n_epochs + 1)]
+            data_row = ", ".join(map(str, predictions_per_epoch))
+            fb.write(f"{key}, {data_row}\n")
+
+    plot_log_file(metrics_csv, metrics_img)
+    plot_aa_preds_heatmap(preds_csv, preds_img)
 
     # End timer and print duration
     end_time = time.time()
     duration = end_time - start_time
     formatted_duration = str(datetime.timedelta(seconds=duration))
-    days, hrs, minutes = formatted_duration.split(":")
-    print(f'Training and testing complete in: {days} days, {hrs} hours, {minutes} minutes.')
+    print(f'Training and testing complete in: {formatted_duration}')
 
-def epoch_iteration(model, tokenizer, loss_fn, optimizer_scheduler, data_loader, epoch, max_batch, device, mode):
+def epoch_iteration(model, tokenizer, loss_fn, scheduler, data_loader, epoch, max_batch, device, mode):
     """ Used in run_model. """
     
     model.train() if mode=='train' else model.eval()
@@ -337,10 +356,13 @@ def epoch_iteration(model, tokenizer, loss_fn, optimizer_scheduler, data_loader,
                           bar_format='{l_bar}{r_bar}')
 
     total_loss = 0
-    total_items = 0
     total_masked = 0
     correct_predictions = 0
     aa_pred_counter = defaultdict(int)
+
+    # Set max_batch if None
+    if not max_batch:
+        max_batch = len(data_loader)
 
     for batch, batch_data in data_iter:
         if max_batch > 0 and batch >= max_batch:
@@ -351,12 +373,12 @@ def epoch_iteration(model, tokenizer, loss_fn, optimizer_scheduler, data_loader,
         unmasked_tokenized_seqs = tokenizer._batch_pad(seqs).to(device)
    
         if mode == 'train':
-            optimizer_scheduler.zero_grad()
+            scheduler.zero_grad()
             preds = model(masked_tokenized_seqs)
             batch_loss = loss_fn(preds.transpose(1, 2), unmasked_tokenized_seqs)
             batch_loss.backward()
             torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
-            optimizer_scheduler.step_and_update_lr()
+            scheduler.step_and_update_lr()
 
         else:
             with torch.no_grad():
@@ -372,17 +394,19 @@ def epoch_iteration(model, tokenizer, loss_fn, optimizer_scheduler, data_loader,
         correct_predictions += torch.eq(predicted_tokens[masked_locations], unmasked_tokenized_seqs[masked_locations]).sum().item()
         total_masked += masked_locations[0].numel()     
 
-        # STATS
+        # Track amino acid predictions
         if mode == "test":
             token_to_aa = {i:aa for i, aa in enumerate('ACDEFGHIKLMNPQRSTUVWXY')}                
-            # Create a list of keys from masked_loactions in format "expected_aa -> predicted_aa" where expected_aa != predicted_aa
             aa_keys = [f"{token_to_aa.get(token.item())}->{token_to_aa.get(pred_token.item())}" for token, pred_token in zip(unmasked_tokenized_seqs[masked_locations], predicted_tokens[masked_locations])]
-            # Update the tracker as going through keys (counting occurences)
-            aa_pred_counter.update((aa_key, aa_pred_counter[aa_key] + 1) for aa_key in aa_keys)  
+            for aa_key in aa_keys:
+                aa_pred_counter[aa_key] += 1
 
-    accuracy = (correct_predictions / total_masked) * 100
-    if mode == "train": return accuracy, total_loss
-    else: return accuracy, total_loss, aa_pred_counter
+    # Average accuracy/loss per token
+    avg_accuracy = (correct_predictions / total_masked) * 100
+    avg_loss = total_loss / total_masked
+
+    if mode == "train": return avg_accuracy, avg_loss
+    else: return avg_accuracy, avg_loss, aa_pred_counter
 
 if __name__=='__main__':
 
@@ -411,7 +435,7 @@ if __name__=='__main__':
     train_data_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, drop_last=False, num_workers=num_workers, pin_memory=True)
 
     test_dataset = RBDDataset(os.path.join(data_dir, "spikeprot0528.clean.uniq.noX.RBD.metadata.variants_test.csv"))
-    test_data_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=True, drop_last=False, num_workers=num_workers, pin_memory=True)
+    test_data_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False, drop_last=False, num_workers=num_workers, pin_memory=True)
 
     # BERT input
     max_len = 280
@@ -425,7 +449,7 @@ if __name__=='__main__':
     bert.embedding.load_pretrained_embeddings(os.path.join(data_dir, 'esm_weights-embedding_dim320.pth'), no_grad=False)
     tokenizer = ProteinTokenizer(max_len, mask_prob)
 
-    model = ProteinLM(bert, vocab_size=27)
+    model = ProteinLM(bert, vocab_size=len(token_to_index))
 
     # Run
     count_parameters(model)
