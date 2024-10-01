@@ -21,6 +21,7 @@ import math
 import tqdm
 import time
 import torch
+import random
 import datetime
 import numpy as np
 import pandas as pd
@@ -90,6 +91,8 @@ def run_model(model, tokenizer, train_data_loader, test_data_loader, n_epochs: i
         else:
             model_state, _, _, _, _ = load_model(saved_model_pth, device)
             model.load_state_dict(model_state)
+        
+        dist.barrier()
 
     with open(metrics_csv, "a") as fa:
         if from_checkpoint: 
@@ -105,6 +108,9 @@ def run_model(model, tokenizer, train_data_loader, test_data_loader, n_epochs: i
     start_time = time.time()
 
     for epoch in range(starting_epoch, n_epochs + 1):
+        train_data_loader.sampler.set_epoch(epoch)
+        test_data_loader.sampler.set_epoch(epoch)
+
         train_accuracy, train_loss = epoch_iteration(model, tokenizer, loss_fn, scheduler, train_data_loader, epoch, max_batch, device, mode='train')
         dist.barrier()
         test_accuracy, test_loss, aa_pred_counter = epoch_iteration(model, tokenizer, loss_fn, scheduler, test_data_loader, epoch, max_batch, device, mode='test')
@@ -262,11 +268,11 @@ def main():
     # Create run directory for results
     now = datetime.datetime.now()
     date_hour_minute = now.strftime("%Y-%m-%d_%H-%M")
-    run_dir = os.path.join(results_dir, f"DDP-bert_mlm-rbd-{date_hour_minute}")
+    run_dir = os.path.join(results_dir, f"DDP-bert_mlm-RBD-{date_hour_minute}")
     os.makedirs(run_dir, exist_ok = True)
 
     # Run setup
-    n_epochs = 100
+    n_epochs = 10
     batch_size = 64
     max_batch = -1
     num_workers = 64
@@ -278,16 +284,21 @@ def main():
     torch.cuda.set_device(local_rank)
 
     # Create Dataset and DataLoader, use DistributedSampler - DDP
-    torch.manual_seed(0)
-    torch.cuda.manual_seed_all(0)
+    seed = 0
+    torch.manual_seed(seed)
+
+    def worker_init_fn(worker_id):
+        worker_seed = seed + worker_id + local_rank * num_workers  # Unique seed per worker and rank
+        np.random.seed(worker_seed)
+        random.seed(worker_seed)
 
     train_dataset = RBDDataset(os.path.join(data_dir, "spikeprot0528.clean.uniq.noX.RBD.metadata.variants_train.csv"))
-    train_sampler = DistributedSampler(train_dataset)
-    train_data_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=False, drop_last=False, num_workers=num_workers, pin_memory=True, sampler=train_sampler)
+    train_sampler = DistributedSampler(train_dataset, shuffle=True, seed=seed)
+    train_data_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=False, drop_last=True, num_workers=num_workers, worker_init_fn=worker_init_fn, pin_memory=True, sampler=train_sampler)
 
     test_dataset = RBDDataset(os.path.join(data_dir, "spikeprot0528.clean.uniq.noX.RBD.metadata.variants_test.csv"))
-    test_sampler = DistributedSampler(test_dataset, shuffle=False)
-    test_data_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False, drop_last=False, num_workers=num_workers, pin_memory=True, sampler=test_sampler)
+    test_sampler = DistributedSampler(test_dataset, shuffle=False, seed=seed)
+    test_data_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False, drop_last=False, num_workers=num_workers, worker_init_fn=worker_init_fn, pin_memory=True, sampler=test_sampler)
 
     # BERT input
     max_len = 280

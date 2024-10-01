@@ -209,7 +209,7 @@ if __name__=='__main__':
     # Create run directory for results
     now = datetime.datetime.now()
     date_hour_minute = now.strftime("%Y-%m-%d_%H-%M")
-    run_dir = os.path.join(results_dir, f"bert_mlm-rbd-{date_hour_minute}")
+    run_dir = os.path.join(results_dir, f"bert_mlm-RBD-{date_hour_minute}")
     os.makedirs(run_dir, exist_ok = True)
 
     # Run setup
@@ -218,10 +218,11 @@ if __name__=='__main__':
     max_batch = -1
     num_workers = 64
     lr = 1e-5
-    device = torch.device("cuda:2" if torch.cuda.is_available() else "cpu")
+    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
     # Create Dataset and DataLoader
     torch.manual_seed(0)
+    torch.cuda.manual_seed(seed)
 
     train_dataset = RBDDataset(os.path.join(data_dir, "spikeprot0528.clean.uniq.noX.RBD.metadata.variants_train.csv"))
     train_data_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, drop_last=False, num_workers=num_workers, pin_memory=True)
@@ -244,7 +245,7 @@ if __name__=='__main__':
 
     # Run
     count_parameters(model)
-    saved_model_pth = "Spike_NLP_kaetlyn/results/run_results/bert_mlm/bert_mlm-rbd-2024-09-24_20-31/best_saved_model.pth"
+    saved_model_pth = None
     from_checkpoint = False
     save_as = f"bert_mlm-RBD-train_{len(train_dataset)}_test_{len(test_dataset)}"
     run_model(model, tokenizer, train_data_loader, test_data_loader, n_epochs, lr, max_batch, device, run_dir, save_as, saved_model_pth, from_checkpoint)

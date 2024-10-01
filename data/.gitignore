@@ -1,4 +1,6 @@
 *.db
 *.tsv
-*.pdf
 *.pkl
+
+rbd/spikeprot0528.clean.uniq.noX.RBD.metadata.variants.ADO_CLS-embedded.parquet
+rbd/spikeprot0528.clean.uniq.noX.RBD.metadata.variants.ADO.csv
