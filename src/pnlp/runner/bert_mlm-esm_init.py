@@ -2,7 +2,6 @@
 """
 Model runner for ESM-initialized BERT-MLM model.
 """
-
 import os
 import re
 import sys
@@ -24,7 +23,7 @@ from collections import defaultdict
 from pnlp.model.language import BERT, ProteinLM
 from pnlp.embedding.tokenizer import ProteinTokenizer, token_to_index
 
-from bert_mlm_runner_util import (
+from runner_util_rbd_bert_mlm import (
     RBDDataset,
     ScheduledOptim,
     count_parameters,
@@ -34,7 +33,6 @@ from bert_mlm_runner_util import (
     plot_log_file,
     plot_aa_preds_heatmap
 )
-
 
 # MODEL RUNNING
 def run_model(model, tokenizer, train_data_loader, test_data_loader, n_epochs: int, lr:float, max_batch: Union[int, None], device: str, run_dir: str, save_as: str, saved_model_pth:str=None, from_checkpoint:bool=False):
@@ -222,7 +220,6 @@ if __name__=='__main__':
 
     # Create Dataset and DataLoader
     torch.manual_seed(0)
-    torch.cuda.manual_seed(seed)
 
     train_dataset = RBDDataset(os.path.join(data_dir, "spikeprot0528.clean.uniq.noX.RBD.metadata.variants_train.csv"))
     train_data_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, drop_last=False, num_workers=num_workers, pin_memory=True)
