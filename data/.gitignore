@@ -2,6 +2,7 @@
 *.tsv
 *.pkl
 
-rbd/parquets/embeddings/spikeprot0528.clean.uniq.noX.RBD.metadata.variants.O_CLS-embedded.parquet
-rbd/spikeprot0528.clean.uniq.noX.RBD.metadata.variants.ADO_CLS-embedded.parquet
+rbd/parquets
 rbd/spikeprot0528.clean.uniq.noX.RBD.metadata.variants.ADO.csv
+
+alphaseq/MITLL_AAlphaBio_Ab_Binding_dataset.csv

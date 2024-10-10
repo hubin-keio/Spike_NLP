@@ -1,0 +1,34 @@
+LOCUS       Delta                  1079 bp    DNA        linear       26-OCT-2021
+DEFINITION  PacBio amplicon for deep mutational scanning of Delta RBD
+SOURCE      Allie Greaney
+FEATURES             Location/Qualifiers
+     termini5        1..33
+                     /label="termini5"
+     spacer          637..1057
+                     /label="spacer"
+     barcode         1058..1073
+                     /label="barcode"
+     termini3        1074..1079
+                     /label="termini3"
+     gene            34..636
+                     /label="gene"
+ORIGIN
+        1 ggccgcggag gcggagggtc ggctagccat atgAATATCA CGAACCTTTG TCCTTTCGGT
+       61 GAGGTCTTCA ATGCTACTAG ATTCGCATCC GTGTATGCAT GGAATAGAAA GAGAATTAGT
+      121 AATTGTGTAG CGGACTACTC TGTACTTTAT AACTCCGCCT CCTTCTCCAC ATTCAAGTGT
+      181 TACGGTGTAT CTCCCACCAA GTTGAATGAT CTATGCTTTA CAAACGTTTA CGCCGATAGT
+      241 TTCGTAATTA GAGGCGATGA AGTGCGTCAG ATCGCACCAG GCCAGACGGG CAAGATAGCA
+      301 GACTATAATT ATAAGCTGCC TGATGACTTC ACCGGCTGTG TGATAGCTTG GAACTCAAAT
+      361 AATCTAGATT CCAAGGTGGG AGGCAATTAC AATTATAGAT ACCGTCTGTT CCGTAAAAGC
+      421 AATTTGAAAC CATTTGAAAG AGACATTAGC ACTGAAATTT ATCAAGCAGG GTCCAAACCG
+      481 TGCAACGGCG TAGAAGGCTT TAACTGTTAT TTCCCATTAC AGTCTTATGG TTTCCAACCT
+      541 ACGAACGGAG TCGGGTATCA GCCGTACAGG GTTGTGGTTC TTTCATTTGA ACTGCTGCAC
+      601 GCGCCCGCAA CCGTATGCGG GCCGAAGAAA TCAACGctcg aggggggcgg ttccgaacaa
+      661 aagcttattt ctgaagagga cttgtaatag agatctgata acaacagtgt agatgtaaca
+      721 aaatcgactt tgttcccact gtacttttag ctcgtacaaa atacaatata cttttcattt
+      781 ctccgtaaac aacatgtttt cccatgtaat atccttttct atttttcgtt ccgttaccaa
+      841 ctttacacat actttatata gctattcact tctatacact aaaaaactaa gacaatttta
+      901 attttgctgc ctgccatatt tcaatttgtt ataaattcct ataatttatc ctattagtag
+      961 ctaaaaaaag atgaatgtga atcgaatcct aagagaatta atgatacggc gaccaccgag
+     1021 atctacactc tttccctaca cgacgctctt ccgatctNNN NNNNNNNNNN NNNgcggcc
+//
