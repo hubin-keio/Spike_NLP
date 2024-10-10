@@ -153,8 +153,8 @@ def run_model(model, tokenizer, train_data_loader, test_data_loader, n_epochs: i
             print(f"NEW BEST model: RMSE loss {best_rmse:.4f}")
             save_model(model, optimizer, model_path, epoch, test_rmse)
         
-        # Save every 10 epochs
-        if epoch > 0 and epoch % 10 == 0:
+        # Save every 100 epochs
+        if epoch > 0 and epoch % 100 == 0:
             model_path = os.path.join(run_dir, f'saved_model-epoch_{epoch}.pth')
             save_model(model, optimizer, model_path, epoch, test_rmse)
 
