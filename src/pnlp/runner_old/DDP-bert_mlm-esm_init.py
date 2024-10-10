@@ -13,8 +13,6 @@ Usage:
         /data/miniconda3/envs/spike_env/bin/time -v torchrun --standalone --nproc_per_node=2 DDP-bert_mlm-esm_init.py 
         /usr/bin/time -v torchrun --standalone --nproc_per_node=2 DDP-bert_mlm-esm_init.py 
 """
-
-
 import os
 import re
 import sys
@@ -52,7 +50,6 @@ import torch.distributed as dist
 from torch.utils.data.distributed import DistributedSampler
 from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.distributed.elastic.multiprocessing.errors import record
-
 
 # MODEL RUNNING
 def run_model(model, tokenizer, train_data_loader, test_data_loader, n_epochs: int, lr:float, max_batch: Union[int, None], device: str, run_dir: str, save_as: str, saved_model_pth:str=None, from_checkpoint:bool=False):
@@ -124,6 +121,7 @@ def run_model(model, tokenizer, train_data_loader, test_data_loader, n_epochs: i
         if dist.get_rank() == 0:
             print(f'Epoch {epoch} | Train Accuracy: {train_accuracy:.4f}, Train Loss: {train_loss:.4f}')
             print(f'{" "*(7+len(str(epoch)))}| Test Accuracy: {test_accuracy:.4f}, Test Loss: {test_loss:.4f}\n') 
+            
             with open(metrics_csv, "a") as fa:         
                 fa.write(f"{epoch},{train_accuracy},{train_loss},{test_accuracy},{test_loss}\n")
                 fa.flush()
