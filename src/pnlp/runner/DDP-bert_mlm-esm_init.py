@@ -258,7 +258,12 @@ def epoch_iteration(model, tokenizer, loss_fn, scheduler, data_loader, epoch, ma
 @record
 def main():
     # Initialize process group - DDP
-    dist.init_process_group(backend='nccl', timeout=datetime.timedelta(seconds=5400))
+    dist.init_process_group(
+        backend='nccl', 
+        timeout=datetime.timedelta(seconds=5400), 
+        rank=int(os.environ['RANK']), 
+        world_size=int(os.environ['WORLD_SIZE']) 
+    )
 
     # Data/results directories
     data_dir = os.path.join(os.path.dirname(__file__), f'../../../data/rbd')
