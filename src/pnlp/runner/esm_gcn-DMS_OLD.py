@@ -33,10 +33,10 @@ from runner_util_dms import (
 class GraphSAGE(nn.Module):
     """ GraphSAGE. """
 
-    def __init__(self, in_channels, out_channels):
+    def __init__(self, input_channels, hidden_channels, output_channels):
         super(GraphSAGE, self).__init__()
-        self.conv1 = SAGEConv(in_channels, 16)
-        self.conv2 = SAGEConv(16, out_channels)
+        self.conv1 = SAGEConv(input_channels, hidden_channels)
+        self.conv2 = SAGEConv(hidden_channels, output_channels)
 
     def forward(self, x, edge_index, batch):
         x = self.conv1(x, edge_index).relu()
@@ -44,7 +44,6 @@ class GraphSAGE(nn.Module):
         x = global_mean_pool(x, batch)
         return x
 
-# ESM-GCN
 class ESM_GCN(nn.Module):
     def __init__(self, esm, gcn):
         super().__init__()
@@ -54,8 +53,18 @@ class ESM_GCN(nn.Module):
     def forward(self, tokenized_seqs):
         with torch.set_grad_enabled(self.training):  # Enable gradients, managed by model.eval() or model.train() in epoch_iteration
             esm_last_hidden_state = self.esm(**tokenized_seqs).last_hidden_state # shape: [batch_size, sequence_length, embedding_dim]
-            esm_cls_embedding = esm_last_hidden_state[:, 0, :]  # CLS token embedding (sequence-level representations), [batch_size, embedding_dim]
-            output = self.gcn(esm_cls_embedding).squeeze(1) # [batch_size]
+            esm_aa_embedding = esm_last_hidden_state[:, 1:-1, :] # Amino Acid-level representations, [batch_size, sequence_length-2, embedding_dim], excludes 1st and last tokens
+            
+            batch_size, seq_length, embedding_dim = esm_aa_embedding.shape
+            
+            edges = torch.stack([torch.arange(seq_length-1), torch.arange(1, seq_length)], dim=0)
+            edge_index = edges.repeat(batch_size, 1, 1).to(esm_aa_embedding.device)
+            
+            x = esm_aa_embedding.view(-1, embedding_dim)
+            batch = torch.arange(batch_size).repeat_interleave(seq_length).to(esm_aa_embedding.device)
+            
+            output = self.gcn(x, edge_index, batch)
+            print(output.shape)
         return output
 
 # MODEL RUNNING
@@ -193,12 +202,12 @@ if __name__=='__main__':
     os.makedirs(run_dir, exist_ok = True)
 
     # Run setup
-    n_epochs = 5000
+    n_epochs = 1
     batch_size = 64
-    max_batch = -1
+    max_batch = 10
     num_workers = 64
     lr = 1e-5
-    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+    device = torch.device("cuda:5" if torch.cuda.is_available() else "cpu")
 
     # Create Dataset and DataLoader
     torch.manual_seed(0)
@@ -215,10 +224,10 @@ if __name__=='__main__':
     tokenizer = AutoTokenizer.from_pretrained(esm_version, cache_dir='../../../../model_downloads')
 
     # GraphSAGE input
-    size = 320
-    input_channels = size 
-    out_channels = 1  # For regression output
-    gcn = GraphSAGE(input_channels, out_channels)
+    input_channels = 320
+    hidden_channels = 256 # closest power of 2 to input channels, should also try 320
+    output_channels = 1  # For regression output
+    gcn = GraphSAGE(input_channels, hidden_channels, output_channels)
 
     model = ESM_GCN(esm, gcn)
 

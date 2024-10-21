@@ -1,3 +1,5 @@
 # Ignore .pth files with epoch numbers greater than 1000
 **/*-epoch_[1-9][1-9][0-9][0-9].pth
 **/*-epoch_[2-9][0-9][0-9][0-9].pth
+
+esm_gcn

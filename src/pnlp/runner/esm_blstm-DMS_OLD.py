@@ -213,7 +213,7 @@ def epoch_iteration(model, tokenizer, loss_fn, optimizer, data_loader, epoch, ma
 if __name__=='__main__':
 
     # Data/results directories
-    result_tag = 'binding' # specify expression or binding
+    result_tag = 'expression' # specify expression or binding
     data_dir = os.path.join(os.path.dirname(__file__), f'../../../data/dms') 
     results_dir = os.path.join(os.path.dirname(__file__), f'../../../results/run_results/esm_blstm')
 
@@ -224,12 +224,12 @@ if __name__=='__main__':
     os.makedirs(run_dir, exist_ok = True)
 
     # Run setup
-    n_epochs = 5000
+    n_epochs = 1050
     batch_size = 64
     max_batch = -1
     num_workers = 64
     lr = 1e-5
-    device = torch.device("cuda:1" if torch.cuda.is_available() else "cpu")
+    device = torch.device("cuda:4" if torch.cuda.is_available() else "cpu")
 
     # Create Dataset and DataLoader
     torch.manual_seed(0)
